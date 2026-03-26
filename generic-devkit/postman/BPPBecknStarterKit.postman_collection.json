@@ -1,0 +1,220 @@
+{
+  "info": {
+    "_postman_id": "6a27c634-3dbe-40be-88f9-cbae2400a2cb",
+    "name": "BPP Beckn Starter Kit",
+    "description": "Usecase-agnostic BPP on_* callbacks for all Beckn Protocol v2.0.0 responses. All schema objects carry JSON-LD @context and @type annotations.\n\nSet bpp_adapter_url = http://localhost:8082/bpp/caller before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "8677993"
+  },
+  "item": [
+    {
+      "name": "1 — Transaction",
+      "item": [
+        {
+          "name": "on_select",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"context\": {\n    \"networkId\": \"beckn.one/testnet\",\n    \"action\": \"on_select\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"bppId\": \"{{bpp_id}}\",\n    \"bppUri\": \"{{bpp_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\"\n  },\n  \"message\": {\n    \"contract\": {\n      \"@type\": \"beckn:Contract\",\n      \"id\": \"draft-contract-0001\",\n      \"participants\": [\n        {\n          \"@type\": \"Participant\",\n          \"id\": \"participant-buyer-001\",\n          \"descriptor\": {\n            \"@type\": \"Descriptor\",\n            \"name\": \"John Doe\",\n            \"code\": \"buyer\"\n          }\n        }\n      ],\n      \"commitments\": [\n        {\n          \"@type\": \"beckn:Commitment\",\n          \"id\": \"commitment-001\",\n          \"descriptor\": {\n            \"@type\": \"beckn:Descriptor\",\n            \"name\": \"Basic Service Package\",\n            \"code\": \"BSP-001\"\n          },\n          \"status\": {\n              \"@type\": \"beckn:Descriptor\",\n              \"code\": \"DRAFT\"\n          },\n          \"resources\": [\n            {\n              \"@type\": \"beckn:Resource\",\n              \"id\": \"resource-001\",\n              \"descriptor\": {\n                \"@type\": \"beckn:Descriptor\",\n                \"name\": \"Basic Service Package\",\n                \"code\": \"BSP-001\"\n              },\n              \"quantity\": {\n                \"unitQuantity\": 2,\n                \"unitCode\": \"UNIT\"\n              }\n            }\n          ],\n          \"offer\": {\n            \"@type\": \"beckn:Offer\",\n            \"id\": \"offer-001\",\n            \"resourceIds\": [\n              \"resource-001\"\n            ]\n          }\n        }\n      ],\n      \"consideration\": [\n      {\n        \"@type\": \"beckn:Consideration\",\n        \"id\": \"consideration-001\",\n        \"price\": {\n          \"@type\": \"beckn:PriceSpecification\",\n          \"currency\": \"INR\",\n          \"value\": \"2000.00\"\n        },\n        \"status\": {\n            \"@type\": \"beckn:Descriptor\",\n            \"code\": \"DRAFT\"\n        },\n        \"breakup\": [\n          {\n            \"title\": \"Base Price\",\n            \"price\": {\n              \"@type\": \"beckn:PriceSpecification\",\n              \"currency\": \"INR\",\n              \"value\": \"1800.00\"\n            }\n          },\n          {\n            \"title\": \"Taxes\",\n            \"price\": {\n              \"@type\": \"beckn:PriceSpecification\",\n              \"currency\": \"INR\",\n              \"value\": \"200.00\"\n            }\n          }\n        ]\n      }\n      ]\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{bpp_adapter_url}}/on_select",
+              "host": [
+                "{{bpp_adapter_url}}"
+              ],
+              "path": [
+                "on_select"
+              ]
+            },
+            "description": "BPP returns updated contract draft with pricing after selection."
+          },
+          "response": []
+        },
+        {
+          "name": "on_init",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"context\": {\n    \"networkId\": \"beckn.one/testnet\",\n    \"action\": \"on_init\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"bppId\": \"{{bpp_id}}\",\n    \"bppUri\": \"{{bpp_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\"\n  },\n  \"message\": {\n    \"contract\": {\n      \"@type\": \"beckn:Contract\",\n      \"commitments\": [\n        {\n          \"@type\": \"beckn:Commitment\",\n          \"status\": {\n            \"descriptor\": {\n              \"@type\": \"beckn:Descriptor\",\n              \"code\": \"DRAFT\"\n            }\n          },\n          \"resources\": [\n            {\n              \"@type\": \"beckn:Resource\",\n              \"id\": \"resource-001\",\n              \"descriptor\": {\n                \"@type\": \"beckn:Descriptor\",\n                \"name\": \"Basic Service Package\",\n                \"code\": \"BSP-001\"\n              },\n              \"quantity\": {\n                \"unitQuantity\": 2,\n                \"unitCode\": \"UNIT\"\n              }\n            }\n          ],\n          \"offer\": {\n            \"@type\": \"beckn:Offer\",\n            \"id\": \"offer-001\",\n            \"resourceIds\": [\n              \"resource-001\"\n            ]\n          }\n        }\n      ],\n      \"participants\": [\n        {\n          \"@type\": \"Participant\",\n          \"id\": \"participant-buyer-001\",\n          \"descriptor\": {\n            \"@type\": \"Descriptor\",\n            \"name\": \"John Doe\",\n            \"code\": \"buyer\"\n          }\n        }\n      ],\n      \"performance\": [\n        {\n          \"@type\": \"Performance\",\n          \"id\": \"perf-001\"\n        }\n      ],\n      \"settlements\": [\n        {\n          \"@type\": \"Settlement\",\n          \"id\": \"settlement-001\",\n          \"status\": \"DRAFT\"\n        }\n      ]\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{bpp_adapter_url}}/on_init",
+              "host": [
+                "{{bpp_adapter_url}}"
+              ],
+              "path": [
+                "on_init"
+              ]
+            },
+            "description": "BPP confirms initialised contract with payment details."
+          },
+          "response": []
+        },
+        {
+          "name": "on_confirm",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"context\": {\n    \"networkId\": \"beckn.one/testnet\",\n    \"action\": \"on_confirm\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"bppId\": \"{{bpp_id}}\",\n    \"bppUri\": \"{{bpp_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\"\n  },\n  \"message\": {\n    \"contract\": {\n      \"@type\": \"beckn:Contract\",\n      \"id\": \"draft-contract-0001\",\n      \"commitments\": [\n        {\n          \"@type\": \"beckn:Commitment\",\n          \"id\": \"commitment-001\",\n          \"status\": {\n            \"descriptor\": {\n              \"@type\": \"beckn:Descriptor\",\n              \"code\": \"DRAFT\"\n            }\n          },\n          \"resources\": [\n            {\n              \"@type\": \"beckn:Resource\",\n              \"id\": \"resource-001\",\n              \"descriptor\": {\n                \"@type\": \"beckn:Descriptor\",\n                \"name\": \"Basic Service Package\",\n                \"code\": \"BSP-001\"\n              },\n              \"quantity\": {\n                \"unitQuantity\": 2,\n                \"unitCode\": \"UNIT\"\n              }\n            }\n          ],\n          \"offer\": {\n            \"@type\": \"beckn:Offer\",\n            \"id\": \"offer-001\",\n            \"resourceIds\": [\n              \"resource-001\"\n            ]\n          }\n        }\n      ],\n      \"participants\": [\n        {\n          \"@type\": \"Participant\",\n          \"id\": \"participant-buyer-001\",\n          \"descriptor\": {\n            \"@type\": \"Descriptor\",\n            \"name\": \"John Doe\",\n            \"code\": \"buyer\"\n          }\n        }\n      ],\n      \"performance\": [\n        {\n          \"@type\": \"Performance\",\n          \"id\": \"perf-001\"\n        }\n      ],\n      \"settlements\": [\n        {\n          \"@type\": \"Settlement\",\n          \"id\": \"settlement-001\",\n          \"status\": \"COMPLETE\"\n        }\n      ]\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{bpp_adapter_url}}/on_confirm",
+              "host": [
+                "{{bpp_adapter_url}}"
+              ],
+              "path": [
+                "on_confirm"
+              ]
+            },
+            "description": "BPP confirms contract as binding and provides performance details."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2 — Catalog Publishing",
+      "item": [
+        {
+          "name": "publish",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"context\": {\n    \"networkId\": \"beckn.one/testnet\",\n    \"action\": \"catalog/publish\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"bppId\": \"{{bpp_id}}\",\n    \"bppUri\": \"{{bpp_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\"\n  },\n    \"message\": {\n        \"catalogs\": [\n            {\n                \"id\": \"CAT-GENERIC-001\",\n                \"descriptor\": {\n                    \"@type\": \"beckn:Descriptor\",\n                    \"name\": \"Generic Catalog\",\n                    \"shortDesc\": \"Daily essentials  generic items\"\n                },\n                \"provider\": {\n                    \"id\": \"PROV-EXAMPLE-01\",\n                    \"descriptor\": {\n                        \"@type\": \"beckn:Descriptor\",\n                        \"name\": \"BP Pvt Ltd\"\n                    },\n                    \"availableAt\": [\n                        {\n                            \"@type\": \"beckn:Location\",\n                            \"geo\": {\n                                \"type\": \"Point\",\n                                \"coordinates\": [\n                                    77.6401,\n                                    12.9116\n                                ]\n                            },\n                            \"address\": {\n                                \"streetAddress\": \"27th Main Rd, Sector 2, HSR Layout\",\n                                \"addressLocality\": \"Bengaluru\",\n                                \"addressRegion\": \"Karnataka\",\n                                \"postalCode\": \"560102\",\n                                \"addressCountry\": \"IN\"\n                            }\n                        }\n                    ]\n                },\n                \"resources\": [\n                    {\n                        \"@type\": \"beckn:Resource\",\n                        \"id\": \"ITEM-GENERIC-001\",\n                        \"descriptor\": {\n                            \"@type\": \"beckn:Descriptor\",\n                            \"name\": \"Bru Gold Instant Coffee Powder\",\n                            \"shortDesc\": \"Rich and aromatic instant coffee powder, 200g\",\n                            \"longDesc\": \"Bru Gold is a premium blend of coffee and chicory, crafted for those who love a rich, flavourful cup. Made from handpicked coffee beans roasted to perfection, this instant coffee powder dissolves quickly to give you a smooth, aromatic brew every time. Whether you prefer your coffee black or with milk, Bru Gold delivers a satisfying coffee experience. Perfect for filter coffee, cappuccino, or a classic South Indian style coffee.\",\n                            \"mediaFile\": [\n                                {\n                                    \"uri\": \"https://www.jiomart.com/images/product/original/599173064/599173064.jpg\",\n                                    \"mimeType\": \"image/jpeg\",\n                                    \"label\": \"Product image\"\n                                }\n                            ]\n                        },\n                        \"provider\": {\n                            \"id\": \"PROV-EXAMPLE-01\",\n                            \"descriptor\": {\n                                \"name\": \"BP Pvt Ltd\",\n                                \"@type\": \"beckn:Descriptor\"\n                            }\n                        },\n                        \"rating\": {\n                            \"ratingValue\": 4.1,\n                            \"ratingCount\": 18200,\n                            \"bestRating\": 5,\n                            \"worstRating\": 1\n                        },\n                        \"availableAt\": [\n                            {\n                                \"@type\": \"beckn:Location\",\n                                \"geo\": {\n                                    \"type\": \"Point\",\n                                    \"coordinates\": [\n                                        77.6401,\n                                        12.9116\n                                    ]\n                                },\n                                \"address\": {\n                                    \"streetAddress\": \"27th Main Rd, Sector 2, HSR Layout\",\n                                    \"addressLocality\": \"Bengaluru\",\n                                    \"addressRegion\": \"Karnataka\",\n                                    \"postalCode\": \"560102\",\n                                    \"addressCountry\": \"IN\"\n                                }\n                            }\n                        ]\n                    },\n                    {\n                        \"@type\": \"beckn:Resource\",\n                        \"id\": \"ITEM-GENERIC-002\",\n                        \"descriptor\": {\n                            \"@type\": \"beckn:Descriptor\",\n                            \"name\": \"Generic Classic Item\",\n                            \"shortDesc\": \"Pure soluble coffee, bold and rich, 100g\",\n                            \"longDesc\": \"Nescafe Classic is made from 100% pure coffee beans, carefully selected and roasted to deliver a bold, rich flavour in every cup. This instant coffee dissolves instantly in hot or cold water, making it ideal for a quick coffee fix anytime. The deep roast brings out natural coffee aromas that energise your mornings. Loved by coffee enthusiasts across India, Nescafe Classic is the trusted choice for a consistently great cup of coffee.\",\n                            \"mediaFile\": [\n                                {\n                                    \"uri\": \"https://m.media-amazon.com/images/S/aplus-media/vc/bb6a0196-cad0-4395-b85e-134ef725c0f7._CR0,0,1251,1251_PT0_SX300__.png\",\n                                    \"mimeType\": \"image/png\",\n                                    \"label\": \"Product image\"\n                                }\n                            ]\n                        },\n                        \"provider\": {\n                            \"id\": \"PROV-EXAMPLE-02\",\n                            \"descriptor\": {\n                                \"name\": \"Mart Pvt Ltd\",\n                                \"@type\": \"beckn:Descriptor\"\n                            }\n                        },\n                        \"rating\": {\n                            \"ratingValue\": 4.1,\n                            \"ratingCount\": 32500,\n                            \"bestRating\": 5,\n                            \"worstRating\": 1\n                        },\n                        \"availableAt\": [\n                            {\n                                \"@type\": \"beckn:Location\",\n                                \"geo\": {\n                                    \"type\": \"Point\",\n                                    \"coordinates\": [\n                                        76.6394,\n                                        12.2958\n                                    ]\n                                },\n                                \"address\": {\n                                    \"streetAddress\": \"12 Sayyaji Rao Road, Devaraja Market\",\n                                    \"addressLocality\": \"Mysore\",\n                                    \"addressRegion\": \"Karnataka\",\n                                    \"postalCode\": \"570001\",\n                                    \"addressCountry\": \"IN\"\n                                }\n                            }\n                        ]\n                    }\n                ],\n                \"offers\": [\n                    {\n                        \"@type\": \"beckn:Offer\",\n                        \"id\": \"OFFER-GENERIC-002\",\n                        \"descriptor\": {\n                            \"name\": \"Generic Bundle\",\n                            \"shortDesc\": \"Bru Gold + Nescafe Classic at 15% off - your morning coffee essentials\",\n                            \"@type\": \"beckn:Descriptor\"\n                        },\n                        \"resourceIds\": [\n                            \"ITEM-GENERIC-001\"\n                        ],\n                        \"provider\": {\n                            \"id\": \"PROV-EXAMPLE-01\"\n                        },\n                        \"validity\": {\n                            \"@type\": \"TimePeriod\",\n                            \"startDate\": \"2026-03-04T00:00:00Z\",\n                            \"endDate\": \"2026-03-31T23:59:59Z\"\n                        }\n                    },\n                    {\n                        \"@type\": \"beckn:Offer\",\n                        \"id\": \"OFFER-GROCERY-STAPLES-SAVER-002\",\n                        \"descriptor\": {\n                            \"name\": \"Hot Beverages Pack\",\n                            \"shortDesc\": \"Nescafe Classic + Tata Tea Premium combo - 10% off on your daily beverages\",\n                            \"@type\": \"beckn:Descriptor\"\n                        },\n                        \"resourceIds\": [\n                            \"ITEM-GENERIC-002\"\n                        ],\n                        \"provider\": {\n                            \"id\": \"PROV-EXAMPLE-01\"\n                        },\n                        \"validity\": {\n                            \"@type\": \"TimePeriod\",\n                            \"startDate\": \"2026-03-04T00:00:00Z\",\n                            \"endDate\": \"2026-03-31T23:59:59Z\"\n                        }\n                    }\n                ],\n                \"publishDirectives\": {\n                    \"catalogType\": \"regular\"\n                }\n            }\n        ]\n    }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{bpp_adapter_url}}/publish",
+              "host": [
+                "{{bpp_adapter_url}}"
+              ],
+              "path": [
+                "publish"
+              ]
+            },
+            "description": "Network returns catalog processing result after publish."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "requests": {},
+        "exec": [
+          "// Beckn Protocol v2.0.0 — BPP Generic Collection",
+          "// Pre-request: set transaction_id to match the BAP collection for end-to-end testing",
+          "if (!pm.collectionVariables.get('transaction_id')) {",
+          "    pm.collectionVariables.set('transaction_id', pm.variables.replaceIn('{{$guid}}'));",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "requests": {},
+        "exec": [
+          "pm.test('Status code is 200', function () {",
+          "    pm.response.to.have.status(200);",
+          "});",
+          "pm.test('Response has ack', function () {",
+          "    const json = pm.response.json();",
+          "    pm.expect(json).to.have.property('message');",
+          "    pm.expect(json.message).to.have.property('ack');",
+          "    pm.expect(json.message.ack.status).to.eql('ACK');",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "bpp_adapter_url",
+      "value": "http://localhost:8082/bpp/caller",
+      "description": "BAP adapter caller endpoint (outbound)"
+    },
+    {
+      "key": "bap_id",
+      "value": "bap.example.com",
+      "description": "BAP subscriber ID (FQDN)"
+    },
+    {
+      "key": "bap_uri",
+      "value": "http://onix-bap:8081/bap/receiver",
+      "description": "BAP receiver callback URI (Docker hostname)"
+    },
+    {
+      "key": "bpp_id",
+      "value": "bpp.example.com",
+      "description": "BPP subscriber ID (FQDN)"
+    },
+    {
+      "key": "bpp_uri",
+      "value": "http://onix-bpp:8082/bpp/receiver",
+      "description": "BPP receiver URI (Docker hostname)"
+    },
+    {
+      "key": "networkId",
+      "value": "beckn.one/testnet",
+      "description": "Network identifier"
+    },
+    {
+      "key": "transaction_id",
+      "value": "",
+      "description": "Transaction ID — set once in pre-request script, shared across all calls in a flow"
+    }
+  ]
+}

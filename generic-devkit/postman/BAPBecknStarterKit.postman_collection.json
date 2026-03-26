@@ -1,0 +1,218 @@
+{
+  "info": {
+    "_postman_id": "8dd67b30-32f7-4d75-8af2-8781146beab1",
+    "name": "BAP Beckn Starter Kit",
+    "description": "Usecase-agnostic BAP requests for all Beckn Protocol v2.0.0 actions. All schema objects carry JSON-LD @context and @type annotations.\n\nSet bap_adapter_url = http://localhost:8081/bap/caller before running.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_exporter_id": "8677993"
+  },
+  "item": [
+    {
+      "name": "1 — Discovery",
+      "item": [
+        {
+          "name": "discover",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\":[]\n  },\n  \"message\": {\n        \"intent\": {\n            \"filters\": {\n                \"type\": \"jsonpath\",\n                \"expression\":\"$.catalogs[*].offers[*] ? (@.offerAttributes.tariffModel == 'FLAT_DISCOUNT' && @.offerAttributes.priceSpecification.price < 100)\"  \n            }\n        }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{bap_adapter_url}}/discover",
+              "host": [
+                "{{bap_adapter_url}}"
+              ],
+              "path": [
+                "discover"
+              ]
+            },
+            "description": "BAP selects resources from catalog.\n\nSpec rules (beckn.yaml):\n• Commitment.required = [status, resources, offer]\n• status.descriptor.code ∈ {DRAFT, ACTIVE, CLOSED}\n• resources = array of Resource (each needs @type, id, descriptor, quantity)\n• offer.required = [@type, id, resourceIds]\n• @context omitted on all core beckn.yaml objects"
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2 — Transaction",
+      "item": [
+        {
+          "name": "select",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"bppId\": \"{{bpp_id}}\",\n    \"bppUri\": \"{{bpp_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\":[]\n  },\n  \"message\": {\n        \"intent\": {\n            \"filters\": {\n                \"type\": \"jsonpath\",\n                \"expression\":\"$.catalogs[*].offers[*] ? (@.offerAttributes.tariffModel == 'FLAT_DISCOUNT' && @.offerAttributes.priceSpecification.price < 100)\"  \n            }\n        }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{bap_adapter_url}}/select",
+              "host": [
+                "{{bap_adapter_url}}"
+              ],
+              "path": [
+                "select"
+              ]
+            },
+            "description": "BAP selects resources from catalog.\n\nSpec rules (beckn.yaml):\n• Commitment.required = [status, resources, offer]\n• status.descriptor.code ∈ {DRAFT, ACTIVE, CLOSED}\n• resources = array of Resource (each needs @type, id, descriptor, quantity)\n• offer.required = [@type, id, resourceIds]\n• @context omitted on all core beckn.yaml objects"
+          },
+          "response": []
+        },
+        {
+          "name": "init",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"init\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"bppId\": \"{{bpp_id}}\",\n    \"bppUri\": \"{{bpp_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\"\n  },\n  \"message\": {\n    \"contract\": {\n      \"@type\": \"beckn:Contract\",\n      \"commitments\": [\n        {\n          \"@type\": \"beckn:Commitment\",\n          \"status\": {\n            \"descriptor\": {\n              \"@type\": \"beckn:Descriptor\",\n              \"code\": \"DRAFT\"\n            }\n          },\n          \"resources\": [\n            {\n              \"@type\": \"beckn:Resource\",\n              \"id\": \"resource-001\",\n              \"descriptor\": {\n                \"@type\": \"beckn:Descriptor\",\n                \"name\": \"Basic Service Package\",\n                \"code\": \"BSP-001\"\n              },\n              \"quantity\": {\n                \"unitQuantity\": 2,\n                \"unitCode\": \"UNIT\"\n              }\n            }\n          ],\n          \"offer\": {\n            \"@type\": \"beckn:Offer\",\n            \"id\": \"offer-001\",\n            \"resourceIds\": [\n              \"resource-001\"\n            ]\n          }\n        }\n      ],\n      \"participants\": [\n        {\n          \"@type\": \"Participant\",\n          \"id\": \"participant-buyer-001\",\n          \"descriptor\": {\n            \"@type\": \"Descriptor\",\n            \"name\": \"John Doe\",\n            \"code\": \"buyer\"\n          }\n        }\n      ],\n      \"performance\": [\n        {\n          \"@type\": \"Performance\",\n          \"id\": \"perf-001\"\n        }\n      ],\n      \"settlements\": [\n        {\n          \"@type\": \"Settlement\",\n          \"id\": \"settlement-001\",\n          \"status\": \"DRAFT\"\n        }\n      ]\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{bap_adapter_url}}/init",
+              "host": [
+                "{{bap_adapter_url}}"
+              ],
+              "path": [
+                "init"
+              ]
+            },
+            "description": "BAP provides buyer details, performance preferences, and payment intent.\n\nSpec rules (beckn.yaml):\n• participants carry buyer contact via participantAttributes (Attributes bag)\n• performance.required = [@context, @type] per spec — @context kept as spec const\n• settlements carry payment method via settlementAttributes (Attributes bag)\n• @context omitted on all core beckn.yaml objects except Performance (spec-required)"
+          },
+          "response": []
+        },
+        {
+          "name": "confirm",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"confirm\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"bppId\": \"{{bpp_id}}\",\n    \"bppUri\": \"{{bpp_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\"\n  },\n  \"message\": {\n    \"contract\": {\n      \"@type\": \"beckn:Contract\",\n      \"id\": \"draft-contract-0001\",\n      \"commitments\": [\n        {\n          \"@type\": \"beckn:Commitment\",\n          \"id\": \"commitment-001\",\n          \"status\": {\n            \"descriptor\": {\n              \"@type\": \"beckn:Descriptor\",\n              \"code\": \"DRAFT\"\n            }\n          },\n          \"resources\": [\n            {\n              \"@type\": \"beckn:Resource\",\n              \"id\": \"resource-001\",\n              \"descriptor\": {\n                \"@type\": \"beckn:Descriptor\",\n                \"name\": \"Basic Service Package\",\n                \"code\": \"BSP-001\"\n              },\n              \"quantity\": {\n                \"unitQuantity\": 2,\n                \"unitCode\": \"UNIT\"\n              }\n            }\n          ],\n          \"offer\": {\n            \"@type\": \"beckn:Offer\",\n            \"id\": \"offer-001\",\n            \"resourceIds\": [\n              \"resource-001\"\n            ]\n          }\n        }\n      ],\n      \"participants\": [\n        {\n          \"@type\": \"Participant\",\n          \"id\": \"participant-buyer-001\",\n          \"descriptor\": {\n            \"@type\": \"Descriptor\",\n            \"name\": \"John Doe\",\n            \"code\": \"buyer\"\n          }\n        }\n      ],\n      \"performance\": [\n        {\n          \"@type\": \"Performance\",\n          \"id\": \"perf-001\"\n        }\n      ],\n      \"settlements\": [\n        {\n          \"@type\": \"Settlement\",\n          \"id\": \"settlement-001\",\n          \"status\": \"COMPLETE\"\n        }\n      ]\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{bap_adapter_url}}/confirm",
+              "host": [
+                "{{bap_adapter_url}}"
+              ],
+              "path": [
+                "confirm"
+              ]
+            },
+            "description": "BAP confirms the contract after payment or binding commitment."
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Beckn Protocol v2.0.0 — BAP Generic Collection",
+          "// Pre-request: transaction_id can be overridden here for end-to-end flows",
+          "if (!pm.collectionVariables.get('transaction_id')) {",
+          "    pm.collectionVariables.set('transaction_id', pm.variables.replaceIn('{{$guid}}'));",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('Status code is 200', function () {",
+          "    pm.response.to.have.status(200);",
+          "});",
+          "pm.test('Response has ack', function () {",
+          "    const json = pm.response.json();",
+          "    pm.expect(json).to.have.property('message');",
+          "    pm.expect(json.message).to.have.property('ack');",
+          "    pm.expect(json.message.ack.status).to.eql('ACK');",
+          "});"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "bap_adapter_url",
+      "value": "http://localhost:8081/bap/caller",
+      "description": "BAP adapter caller endpoint (outbound)"
+    },
+    {
+      "key": "bap_id",
+      "value": "bap.example.com",
+      "description": "BAP subscriber ID (FQDN)"
+    },
+    {
+      "key": "bap_uri",
+      "value": "http://onix-bap:8081/bap/receiver",
+      "description": "BAP receiver callback URI (Docker hostname)"
+    },
+    {
+      "key": "bpp_id",
+      "value": "bpp.example.com",
+      "description": "BPP subscriber ID (FQDN)"
+    },
+    {
+      "key": "bpp_uri",
+      "value": "http://onix-bpp:8082/bpp/receiver",
+      "description": "BPP receiver URI (Docker hostname)"
+    },
+    {
+      "key": "networkId",
+      "value": "beckn.one/testnet",
+      "description": "Network identifier"
+    },
+    {
+      "key": "transaction_id",
+      "value": "",
+      "description": "Transaction ID — set once in pre-request script, shared across all calls in a flow"
+    }
+  ]
+}
