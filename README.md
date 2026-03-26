@@ -1,6 +1,6 @@
 # Getting Started with Beckn
 
-This document is a developer toolkit for building and testing a sample network on the **beckn network testnet**. This devkit (developer kit) provides a pre-configured adapter stack and ready-to-use Postman collections to help you get started quickly — whether you're running locally with Docker or deploying to a cloud VPS.
+This document is a toolkit for building and testing a sample network on the **beckn network**. This devkit (developer kit) provides a pre-configured adapter stack and ready-to-use Postman collections to help you get started quickly — whether you're running locally with Docker or deploying to a cloud VPS.
 
 ---
 
@@ -40,7 +40,7 @@ Every message is digitally signed, schema-validated, and routed through middlewa
 
 ## How the Devkit Works
 
-The devkit spins up a self-contained beckn network on your machine. It simulates both sides of a transaction — the buyer (BAP) and the seller (BPP) — so you can observe the full protocol flow without needing to connect to any external service.
+The devkit spins up a self-contained beckn network in your environment. It simulates both sides of a transaction — the consumer (BAP) and the provider (BPP) — so you can observe the full protocol flow without needing to connect to any external service.
 
 ### The Four Services
 
