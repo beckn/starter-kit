@@ -269,8 +269,8 @@ Now that you have seen the network in action, here is a deeper look at how the p
 |---------|-------|------|------|
 | `onix-bap` | `fidedocker/onix-adapter` | 8081 | BAP-side protocol adapter |
 | `onix-bpp` | `fidedocker/onix-adapter` | 8082 | BPP-side protocol adapter |
-| `sandbox-bap` | `fidedocker/sandbox-2.0` | 3001 | Simulates a BAP application |
-| `sandbox-bpp` | `fidedocker/sandbox-2.0` | 3002 | Simulates a BPP application |
+| `app-bap` | `fidedocker/sandbox-2.0` | 3001 | Simulates a BAP application |
+| `app-bpp` | `fidedocker/sandbox-2.0` | 3002 | Simulates a BPP application |
 | `redis` | `redis:alpine` | 6379 | Shared request/response cache |
 
 **The ONIX adapter** (`fidedocker/onix-adapter`) is the core middleware from the [beckn-onix](https://github.com/beckn/beckn-onix) project. It is a plugin-based Go server that handles signing, signature validation, schema validation, and routing for every beckn message. Both `onix-bap` and `onix-bpp` run the same binary — their behaviour is entirely determined by their config files.
@@ -372,7 +372,7 @@ The key insight: **discovery always goes through the Discovery Service** (BAP �
 
 Here is the step-by-step journey of a single `discover` call, showing what happens inside each service:
 
-**1. Postman → app-bap → onix-bap**
+**1. Postman → onix-bap**
 You trigger a `discover` by POSTing to onix-bap's caller endpoint (`/bap/caller/discover`). The `bapTxnCaller` module picks it up.
 
 **2. addRoute** — the adapter reads `generic-routing-BAPCaller.yaml` and matches the `discover` action to the configured Discovery Service URL.
@@ -502,10 +502,11 @@ docker compose -f docker-compose-generic.yml logs
 
 **app-bap or app-bpp stays in `starting` state**
 
-The application containers health-check at `/api/health`. If they don't reach `healthy` within about a minute, inspect their logs (using the container name from the compose file):
+The application containers health-check at `/api/health`. If they don't reach `healthy` within about a minute, inspect their logs. Note that the Docker container names in the compose file are `sandbox-bap` and `sandbox-bpp` (use those in Docker commands even though we refer to them conceptually as `app-bap` / `app-bpp`):
 
 ```shell
 docker compose -f docker-compose-generic.yml logs sandbox-bap
+docker compose -f docker-compose-generic.yml logs sandbox-bpp
 ```
 
 **Postman requests return connection errors**
