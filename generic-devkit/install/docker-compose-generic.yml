@@ -21,7 +21,7 @@ services:
   #   Receiver (inbound): http://localhost:8081/bap/receiver/
   # ============================================================
   onix-bap:
-    image: fidedocker/onix-adapter:1.5.0
+    image: fidedocker/onix-adapter
     container_name: onix-bap
     platform: linux/amd64
     networks:
@@ -44,7 +44,7 @@ services:
   #   Receiver (inbound): http://localhost:8082/bpp/receiver/
   # ============================================================
   onix-bpp:
-    image: fidedocker/onix-adapter:1.5.0
+    image: fidedocker/onix-adapter
     container_name: onix-bpp
     platform: linux/amd64
     networks:
