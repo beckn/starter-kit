@@ -10,6 +10,7 @@ A hands-on starter kit for running a live beckn network in your own environment 
 - [What is Beckn? — A Quick Recap](#what-is-beckn---a-quick-recap)
 - [Prerequisites](#prerequisites)
 - [Quick Start: Run the Network Locally](#quick-start-run-the-network-locally)
+- [Public-Internet Testing (ngrok)](#public-internet-testing-ngrok)
 - [Deployment: Cloud VPS](#deployment-cloud-vps)
 - [Your First Transaction](#your-first-transaction)
 - [How It All Works](#how-it-all-works)
@@ -62,8 +63,10 @@ Ensure the following tools are installed before you begin:
   - Docker Compose ships with Docker Desktop; for Linux see the [Compose plugin guide](https://docs.docker.com/compose/install/)
 - **Postman** — to send test requests
   - [Download Postman](https://www.postman.com/downloads/)
+- **ngrok** _(optional)_ — only needed if you want `discover` or `publish` callbacks to reach your laptop from external Beckn services
+  - [Download ngrok](https://ngrok.com/download) · requires a free ngrok account
 
-For cloud VPS deployment you additionally need SSH access to a Linux server (Ubuntu 22.04 recommended) with ports 8081 and 8082 open in your firewall.
+For cloud VPS deployment you additionally need SSH access to a Linux server (Ubuntu 22.04 recommended) with ports 8081, 8082, and 9000 open in your firewall.
 
 ---
 
@@ -92,7 +95,7 @@ The first run pulls the required Docker images. This takes a few minutes once; s
 docker compose -f docker-compose-generic.yml ps
 ```
 
-Wait until all five containers show `running` or `healthy`:
+Wait until all containers show `running` or `healthy`:
 
 | Service | Port | Status to expect |
 |---------|------|-----------------|
@@ -101,6 +104,7 @@ Wait until all five containers show `running` or `healthy`:
 | `onix-bpp` | 8082 | `running` |
 | `app-bap` | 3001 | `healthy` |
 | `app-bpp` | 3002 | `healthy` |
+| `beckn-router` | 9000 | `running` |
 
 **Step 4 — (Optional) Watch the adapters in real time**
 
@@ -117,6 +121,94 @@ You will see each message being signed, validated, and routed as you work throug
 ```shell
 docker compose -f docker-compose-generic.yml down
 ```
+
+---
+
+## Public-Internet Testing (ngrok)
+
+When you send a `discover` request, the Discovery Service sends `on_discover` back to whatever URL is in `context.bapUri`. When a BPP sends `publish`, the Catalog Service sends `on_publish` back to `context.bppUri`. Both of these callback URLs must be reachable from the public internet — which your laptop is not, by default.
+
+The stack includes **beckn-router**, a Caddy reverse proxy on port 9000 that sits in front of both adapters:
+
+```
+internet
+    │
+https://<your-static-domain>.ngrok-free.app
+    │
+ngrok → localhost:9000
+    │
+beckn-router (Caddy)
+    ├── /bap/receiver  →  onix-bap:8081
+    └── /bpp/receiver  →  onix-bpp:8082
+```
+
+Tunnelling one port gives you a single stable public URL for both adapters. The `bapUri` and `bppUri` fields in your Postman requests are built from a single `public_url` collection variable, so there is only one value to change.
+
+### One-time setup
+
+**Step 1 — Create an ngrok account and get a free static domain**
+
+Sign up at [ngrok.com](https://ngrok.com), copy your authtoken from the dashboard, and claim your free static domain at **Dashboard → Domains → New Domain**.
+
+**Step 2 — Create your ngrok config**
+
+```shell
+cd generic-devkit/install
+cp ngrok.yml.example ngrok.yml
+```
+
+Edit `ngrok.yml` and fill in your authtoken and static domain:
+
+```yaml
+authtoken: <your-authtoken>
+tunnels:
+  beckn:
+    proto: http
+    addr: 9000
+    domain: <your-static-domain>.ngrok-free.app
+```
+
+`ngrok.yml` is git-ignored — your token stays local.
+
+**Step 3 — Update the Postman `public_url` variable**
+
+In both Postman collections, set the `public_url` collection variable to your static domain:
+
+```
+public_url  →  https://<your-static-domain>.ngrok-free.app
+```
+
+`bapUri` and `bppUri` in every request are derived from this single variable — nothing else to change.
+
+### Running with the tunnel
+
+Start the Docker stack as usual, then start ngrok in a separate terminal:
+
+```shell
+# Terminal 1 — Docker stack
+docker compose -f docker-compose-generic.yml up
+
+# Terminal 2 — ngrok tunnel
+ngrok start --all --config ngrok.yml
+```
+
+Watch the tunnel at `http://localhost:4040`. Each `discover` or `publish` flow will show three hops: your Postman request → adapter → external service → callback arriving back through the tunnel.
+
+**Stopping**
+
+```shell
+# Stop Docker
+docker compose -f docker-compose-generic.yml down
+
+# Stop ngrok (in its terminal)
+Ctrl-C
+# or, to kill it from another terminal:
+pkill -f 'ngrok start'
+```
+
+### Local-only testing (no ngrok needed)
+
+For the direct BAP↔BPP transaction flow (`select`, `init`, `confirm`, `on_select`, `on_init`, `on_confirm`), callbacks are routed internally via the DeDi Registry — no public internet required. Leave `public_url` at its default (`http://localhost:9000`) and skip ngrok entirely.
 
 ---
 

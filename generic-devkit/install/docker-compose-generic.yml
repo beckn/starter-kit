@@ -1,5 +1,31 @@
 services:
   # ============================================================
+  # beckn-router — Caddy reverse proxy, single entry point for
+  #   both adapters. Exposes port 9000 on the host.
+  #
+  #   /bap/* → onix-bap:8081
+  #   /bpp/* → onix-bpp:8082
+  #
+  # For public-internet callbacks, tunnel port 9000 via ngrok:
+  #   cp ngrok.yml.example ngrok.yml   # fill in authtoken + domain
+  #   ngrok start --all --config ngrok.yml
+  # Then set PUBLIC_URL in your Postman collection to the tunnel URL.
+  # ============================================================
+  beckn-router:
+    image: caddy:alpine
+    container_name: beckn-router
+    ports:
+      - "9000:9000"
+    networks:
+      - beckn_network
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+    depends_on:
+      - onix-bap
+      - onix-bpp
+    restart: unless-stopped
+
+  # ============================================================
   # Redis — shared cache for both adapters
   # ============================================================
   redis:
