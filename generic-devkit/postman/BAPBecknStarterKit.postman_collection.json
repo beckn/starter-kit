@@ -190,9 +190,14 @@
       "description": "BAP subscriber ID (FQDN)"
     },
     {
+      "key": "public_url",
+      "value": "http://beckn-router:9000",
+      "description": "Base URL for bapUri / bppUri callbacks. Default routes within Docker via beckn-router. For external services (discover/publish): change to https://your-domain.ngrok-free.app"
+    },
+    {
       "key": "bap_uri",
-      "value": "http://onix-bap:8081/bap/receiver",
-      "description": "BAP receiver callback URI (Docker hostname)"
+      "value": "{{public_url}}/bap/receiver",
+      "description": "BAP receiver callback URI — derived from public_url via beckn-router"
     },
     {
       "key": "bpp_id",
@@ -201,8 +206,8 @@
     },
     {
       "key": "bpp_uri",
-      "value": "http://onix-bpp:8082/bpp/receiver",
-      "description": "BPP receiver URI (Docker hostname)"
+      "value": "{{public_url}}/bpp/receiver",
+      "description": "BPP receiver callback URI — derived from public_url via beckn-router"
     },
     {
       "key": "networkId",
