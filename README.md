@@ -206,7 +206,7 @@ pkill -f 'ngrok start'
 
 ### Local-only testing (no ngrok needed)
 
-For the direct BAP↔BPP transaction flow (`select`, `init`, `confirm`, `on_select`, `on_init`, `on_confirm`), callbacks are routed internally via the DeDi Registry — no public internet required. Leave `public_url` at its default (`http://localhost:9000`) and skip ngrok entirely.
+For the direct BAP↔BPP transaction flow (`select`, `init`, `confirm`, `on_select`, `on_init`, `on_confirm`), callbacks are routed internally via the DeDi Registry — no public internet required. Leave `public_url` at its default (`http://beckn-router:9000`) and skip ngrok entirely.
 
 ---
 

@@ -191,8 +191,8 @@
     },
     {
       "key": "public_url",
-      "value": "http://localhost:9000",
-      "description": "Base URL for external-facing callbacks (bapUri / bppUri). For ngrok: change to https://your-domain.ngrok-free.app"
+      "value": "http://beckn-router:9000",
+      "description": "Base URL for bapUri / bppUri callbacks. Default routes within Docker via beckn-router. For external services (discover/publish): change to https://your-domain.ngrok-free.app"
     },
     {
       "key": "bap_uri",
