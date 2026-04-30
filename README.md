@@ -146,11 +146,9 @@ Tunnelling one port gives you a single stable public URL for both adapters. The 
 
 ### One-time setup
 
-**Step 1 — Create an ngrok account and get a free static domain**
+**Step 1 — Get a static ngrok URL and configure the tunnel**
 
-Sign up at [ngrok.com](https://ngrok.com), copy your authtoken from the dashboard, and claim your free static domain at **Dashboard → Domains → New Domain**.
-
-**Step 2 — Create your ngrok config**
+You need an authtoken and a static domain from [ngrok.com](https://ngrok.com) (both available on the free tier). Once you have them:
 
 ```shell
 cd generic-devkit/install
@@ -170,7 +168,7 @@ tunnels:
 
 `ngrok.yml` is git-ignored — your token stays local.
 
-**Step 3 — Update the Postman `public_url` variable**
+**Step 2 — Update the Postman `public_url` variable**
 
 In both Postman collections, set the `public_url` collection variable to your static domain:
 
