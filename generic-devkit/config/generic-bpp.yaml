@@ -36,8 +36,6 @@ modules:
           id: dediregistry
           config:
             url: https://fabric.nfh.global/registry/dedi
-            # registryName is a constant for all NFH/Beckn networks
-            registryName: subscribers.beckn.one
             timeout: 10
             retry_max: 3
             retry_wait_min: 100ms
@@ -47,7 +45,7 @@ modules:
           config:
             # Testnet sandbox subscriber registered on beckn.one/testnet
             # Replace with your own registered subscriber ID and keys for production
-            networkParticipant: bpp.example.com
+            subscriberId: bpp.example.com
             keyId: 76EU7ofwRCF1aobQkShARrf1PAUsNpHqWUJoynPu9w45YFKmzqaPmy
             signingPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
             signingPublicKey: CqVy97DW45bcZPPrWIYGe2ldl9C93NFeVciiAEYsvR0=
@@ -75,6 +73,8 @@ modules:
           id: router
           config:
             routingConfig: ./config/generic-routing-BPPReceiver.yaml
+        signer:
+          id: signer
         middleware:
           - id: reqpreprocessor
             config:
@@ -84,6 +84,7 @@ modules:
         - validateSign
         - addRoute
         - validateSchema
+        - signAck
 
   # ─────────────────────────────────────────────────────────────────
   # BPP Caller  — forwards on_* callbacks back to the originating BAP
@@ -105,8 +106,6 @@ modules:
           id: dediregistry
           config:
             url: https://fabric.nfh.global/registry/dedi
-            # registryName is a constant for all NFH/Beckn networks
-            registryName: subscribers.beckn.one
             timeout: 10
             retry_max: 3
             retry_wait_min: 100ms
@@ -114,7 +113,7 @@ modules:
         keyManager:
           id: simplekeymanager
           config:
-            networkParticipant: bpp.example.com
+            subscriberId: bpp.example.com
             keyId: 76EU7ofwRCF1aobQkShARrf1PAUsNpHqWUJoynPu9w45YFKmzqaPmy
             signingPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
             signingPublicKey: CqVy97DW45bcZPPrWIYGe2ldl9C93NFeVciiAEYsvR0=
@@ -141,6 +140,10 @@ modules:
             routingConfig: ./config/generic-routing-BPPCaller.yaml
         signer:
           id: signer
+        signValidator:
+          id: signvalidator
+        payloadStore:
+          id: payloadstore
         middleware:
           - id: reqpreprocessor
             config:
@@ -149,4 +152,6 @@ modules:
       steps:
         - addRoute
         - sign
+        - validateAckSign
+        - storePayload
         - validateSchema

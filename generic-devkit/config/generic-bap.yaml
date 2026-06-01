@@ -35,8 +35,6 @@ modules:
           id: dediregistry
           config:
             url: https://fabric.nfh.global/registry/dedi
-            # registryName is a constant for all NFH/Beckn networks
-            registryName: subscribers.beckn.one
             timeout: 10
             retry_max: 3
             retry_wait_min: 100ms
@@ -46,7 +44,7 @@ modules:
           config:
             # Testnet sandbox subscriber registered on beckn.one/testnet
             # Replace with your own registered subscriber ID and keys for production
-            networkParticipant: bap.example.com
+            subscriberId: bap.example.com
             keyId: 76EU7LZ7gfqj13dWDKR1Uitnim11mCoxWBPdzLxUpAMBPVdANKgyFM
             signingPrivateKey: TTQMAEy0xJcoRXRNofZAwZq1c3VH6j98UUaHP7budQQ=
             signingPublicKey: g/3swjI93IhZ0SScrVZapeLjU+W0AeiSid3LViYZJFo=
@@ -74,6 +72,8 @@ modules:
           id: router
           config:
             routingConfig: ./config/generic-routing-BAPReceiver.yaml
+        signer:
+          id: signer
         middleware:
           - id: reqpreprocessor
             config:
@@ -83,6 +83,7 @@ modules:
         - validateSign
         - addRoute
         - validateSchema
+        - signAck
 
   # ─────────────────────────────────────────────────────────────────
   # BAP Caller  — forwards outbound BAP requests to BPPs / CDS
@@ -104,8 +105,6 @@ modules:
           id: dediregistry
           config:
             url: https://fabric.nfh.global/registry/dedi
-            # registryName is a constant for all NFH/Beckn networks
-            registryName: subscribers.beckn.one
             timeout: 10
             retry_max: 3
             retry_wait_min: 100ms
@@ -113,7 +112,7 @@ modules:
         keyManager:
           id: simplekeymanager
           config:
-            networkParticipant: bap.example.com
+            subscriberId: bap.example.com
             keyId: 76EU7LZ7gfqj13dWDKR1Uitnim11mCoxWBPdzLxUpAMBPVdANKgyFM
             signingPrivateKey: TTQMAEy0xJcoRXRNofZAwZq1c3VH6j98UUaHP7budQQ=
             signingPublicKey: g/3swjI93IhZ0SScrVZapeLjU+W0AeiSid3LViYZJFo=
@@ -140,6 +139,10 @@ modules:
             routingConfig: ./config/generic-routing-BAPCaller.yaml
         signer:
           id: signer
+        signValidator:
+          id: signvalidator
+        payloadStore:
+          id: payloadstore
         middleware:
           - id: reqpreprocessor
             config:
@@ -148,4 +151,6 @@ modules:
       steps:
         - addRoute
         - sign
+        - validateAckSign
+        - storePayload
         - validateSchema
