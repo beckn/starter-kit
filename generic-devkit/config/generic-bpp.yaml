@@ -75,6 +75,12 @@ modules:
             routingConfig: ./config/generic-routing-BPPReceiver.yaml
         signer:
           id: signer
+        payloadStore:
+          id: payloadstore
+          config:
+            ttl: "24h"
+            indexTTL: "25h"
+            storeSignature: "true"
         middleware:
           - id: reqpreprocessor
             config:
@@ -144,6 +150,10 @@ modules:
           id: signvalidator
         payloadStore:
           id: payloadstore
+          config:
+            ttl: "24h"
+            indexTTL: "25h"
+            storeSignature: "true"
         middleware:
           - id: reqpreprocessor
             config:
@@ -151,7 +161,7 @@ modules:
               role: bpp
       steps:
         - addRoute
-        - sign
-        - validateAckSign
         - storePayload
         - validateSchema
+        - sign
+        - validateAckSign
