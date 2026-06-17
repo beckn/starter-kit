@@ -14,6 +14,8 @@ http:
     idle: 30
 pluginManager:
   root: ./plugins
+  becknConstants:
+    disableRemoteRefresh: true
 
 modules:
   # ─────────────────────────────────────────────────────────────────
@@ -35,7 +37,6 @@ modules:
         registry:
           id: dediregistry
           config:
-            url: https://fabric.nfh.global/registry/dedi
             timeout: 10
             retry_max: 3
             retry_wait_min: 100ms
@@ -58,9 +59,6 @@ modules:
         schemaValidator:
           id: schemav2validator
           config:
-            type: url
-            # Points to the canonical Beckn Protocol v2.0.0 OpenAPI spec
-            location: https://raw.githubusercontent.com/beckn/protocol-specifications-v2/refs/tags/core-v2.0.0-lts/api/v2.0.0/beckn.yaml
             cacheTTL: "3600"
             extendedSchema_enabled: "true"
             extendedSchema_cacheTTL: "86400"
@@ -111,7 +109,6 @@ modules:
         registry:
           id: dediregistry
           config:
-            url: https://fabric.nfh.global/registry/dedi
             timeout: 10
             retry_max: 3
             retry_wait_min: 100ms
@@ -132,8 +129,6 @@ modules:
         schemaValidator:
           id: schemav2validator
           config:
-            type: url
-            location: https://raw.githubusercontent.com/beckn/protocol-specifications-v2/refs/tags/core-v2.0.0-lts/api/v2.0.0/beckn.yaml
             cacheTTL: "3600"
             extendedSchema_enabled: "true"
             extendedSchema_cacheTTL: "86400"
