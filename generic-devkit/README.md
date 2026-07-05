@@ -143,7 +143,7 @@ To register your own subscriber IDs and keys, follow the [DeDi registration guid
 Both adapters validate all payloads against the canonical Beckn v2.0.0 OpenAPI spec:
 
 ```
-https://raw.githubusercontent.com/beckn/protocol-specifications-v2/refs/heads/draft/api/v2.0.0/beckn.yaml
+https://raw.githubusercontent.com/beckn/protocol-specifications-v2/refs/tags/core-v2.0.0-lts/api/v2.0.0/beckn.yaml
 ```
 
 Extended (domain-specific) schema validation is **disabled** by default (`extendedSchema_enabled: "false"`), keeping this devkit fully usecase-agnostic.
