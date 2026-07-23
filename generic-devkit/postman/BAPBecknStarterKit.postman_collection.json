@@ -144,6 +144,44 @@
           "response": []
         }
       ]
+    },
+    {
+      "name": "3 — Catalog",
+      "item": [
+        {
+          "name": "catalog pull",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"bppUri\": \"{{bpp_uri}}\",\n  \"networkId\": \"{{networkId}}\",\n  \"mode\": \"full\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{bap_base_url}}/catalog/pull",
+              "host": [
+                "{{bap_base_url}}"
+              ],
+              "path": [
+                "catalog",
+                "pull"
+              ]
+            },
+            "description": "DS-internal trigger for the catalog-crawler plugin: fetches and verifies the given provider node's manifest -> index -> catalog chain and returns them. Unsigned -- same-operator call, not a signed network action. Response matches beckn.yaml's CatalogPullCallbackAction shape: {status: COMPLETED, catalogs: [...]} or {status: FAILED, error: {...}}."
+          },
+          "response": []
+        }
+      ]
     }
   ],
   "event": [
@@ -218,6 +256,11 @@
       "key": "transaction_id",
       "value": "",
       "description": "Transaction ID — set once in pre-request script, shared across all calls in a flow"
+    },
+    {
+      "key": "bap_base_url",
+      "value": "http://localhost:8081",
+      "description": "BAP adapter host:port, no path suffix -- used by root-level paths like /catalog/pull."
     }
   ]
 }
