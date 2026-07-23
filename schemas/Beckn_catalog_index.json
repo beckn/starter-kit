@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Beckn Catalog Index",
+  "description": "A registry entry describing one catalog a Beckn provider publishes: its lifecycle status, visibility, schema types, and the digest/location of its content. One record per catalogId. The actual Catalog content lives at parts[].url as plain, unsigned Beckn JSON -- its integrity is covered entirely by the digest recorded here.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "catalogId": {
+      "type": "string",
+      "description": "Unique identifier of the catalog within the publisher's namespace."
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonically increasing version counter for this catalog. MUST NOT decrease between publishes; a consumer that has already seen a higher version for this catalogId MUST reject a lower one as a rollback, independent of digest or signature validity."
+    },
+    "catalogType": {
+      "type": "string",
+      "enum": ["MASTER", "REGULAR"],
+      "description": "Whether this is a MASTER catalog that other REGULAR catalogs may extend, or a REGULAR catalog."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["ACTIVE", "RETIRED"],
+      "description": "Lifecycle state of the catalog. RETIRED catalogs are not authoritative and SHOULD NOT be indexed by consumers."
+    },
+    "visibility": {
+      "description": "Who this catalog is intended for: either the literal string \"public\" (openly readable, no access restriction), or an object naming the specific networks it is scoped to.",
+      "oneOf": [
+        { "const": "public" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["networks"],
+          "properties": {
+            "networks": {
+              "type": "array",
+              "items": { "type": "string" },
+              "minItems": 1,
+              "description": "networkIds this catalog is restricted to."
+            }
+          }
+        }
+      ]
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this catalog's content last actually changed (distinct from a re-issue purely for freshness)."
+    },
+    "schemaTypes": {
+      "type": "array",
+      "items": { "type": "string", "format": "uri" },
+      "description": "Domain-specific JSON-LD context/schema URLs the catalog's resources and offers conform to. Optional -- omit for a catalog with no domain-specific extension."
+    },
+    "parts": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The catalog's content, as one or more plain Beckn Catalog JSON files.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["url", "digest", "lastModified"],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Absolute URL of the plain Catalog JSON file. May be hosted anywhere, independent of the manifest's or this index's own host."
+          },
+          "digest": {
+            "type": "string",
+            "pattern": "^sha-256:[0-9a-f]{64}$",
+            "description": "SHA-256 digest of the file at url, prefixed with the algorithm name. This is the catalog file's entire integrity guarantee -- it carries no signature of its own."
+          },
+          "lastModified": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this specific part was last modified."
+          }
+        }
+      }
+    }
+  },
+  "required": ["catalogId", "version", "catalogType", "status", "visibility", "updatedAt", "parts"]
+}
