@@ -93,6 +93,58 @@ Use the **BPP collection** to simulate BPP-initiated callbacks directly (e.g. un
 
 ---
 
+## Catalog Crawler (`catalog/pull`)
+
+`onix-bap` also exposes `/catalog/pull` — a DS-internal trigger that fetches and verifies a provider node's published manifest → index → catalog chain (self-hosted, DeDi-signed catalogs), independent of the discover/select/... transaction flow above. Unlike the other endpoints, it's an unsigned, same-operator call (no `Authorization` header) — see [beckn-onix's catalogcrawler README](https://github.com/beckn/beckn-onix/blob/catalog-crawler/pkg/plugin/implementation/catalogcrawler/README.md) for the full design background.
+
+### Trigger it
+
+Use the **`catalog pull`** request under the BAP collection's **`3 — Catalog`** folder, or call it directly:
+
+```bash
+curl -X POST http://localhost:8081/catalog/pull \
+  -H "Content-Type: application/json" \
+  -d '{
+    "receiverId": "https://angular-absently-gab.ngrok-free.dev",
+    "networkId": "beckn.one/testnet",
+    "mode": "full"
+  }'
+```
+
+`receiverId` is the provider node's address to crawl (for now, treated as a literal domain/URI, not resolved via DID). `mode` is `full` or `incremental` (currently behave identically — incremental digest-skip isn't implemented yet).
+
+### Sample response
+
+```json
+{
+  "status": "COMPLETED",
+  "catalogs": [
+    {
+      "id": "CAT-GENERIC-001",
+      "descriptor": { "name": "Generic Catalog", "shortDesc": "Daily essentials  generic items" },
+      "provider": { "id": "PROV-EXAMPLE-01", "descriptor": { "name": "BP Pvt Ltd" }, "availableAt": [ /* ... */ ] },
+      "resources": [ /* ... items, as published by the provider ... */ ],
+      "offers": [ /* ... offers ... */ ],
+      "validity": { "startDate": "2026-01-01T00:00:00Z", "endDate": "2026-12-31T23:59:59Z" },
+      "isActive": true
+    }
+  ]
+}
+```
+
+Matches beckn.yaml's `CatalogPullCallbackAction` shape exactly — `status` is always present (`COMPLETED`/`FAILED`), `catalogs` only on success. A failed crawl (unreachable provider, bad `receiverId`) still returns `200`, with the failure carried in the body instead:
+
+```json
+{
+  "status": "FAILED",
+  "error": { "code": "BIZ_CRAWL_FAILED", "message": "catalogcrawler: fetching manifest: ..." }
+}
+```
+
+No per-catalog metadata (digests, versions, verification outcomes) is returned to the caller — check `docker logs onix-bap` for those details if a crawl isn't returning what you expect.
+
+---
+
 ## Configuration Reference
 
 ### Collection Variables (Postman)
