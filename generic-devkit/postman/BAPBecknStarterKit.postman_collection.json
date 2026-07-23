@@ -160,7 +160,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"bppUri\": \"{{bpp_uri}}\",\n  \"networkId\": \"{{networkId}}\",\n  \"mode\": \"full\"\n}",
+              "raw": "{\n  \"receiverId\": \"{{bpp_uri}}\",\n  \"networkId\": \"{{networkId}}\",\n  \"mode\": \"full\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
