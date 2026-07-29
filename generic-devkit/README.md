@@ -10,7 +10,7 @@ select → on_select → init → on_init → confirm → on_confirm
 → status / on_status  →  track / on_track
 → update / on_update  →  cancel / on_cancel
 → rate / on_rate  →  support / on_support
-(+ catalog/publish → catalog/on_publish)
+(+ catalog/pull, + catalog/publish -- both DS-internal triggers, not part of the signed transaction flow above)
 ```
 
 ---
@@ -80,7 +80,6 @@ Use the **BAP collection** to drive the transaction lifecycle in order:
 | 8 | `cancel` | Fulfillment |
 | 9 | `rate` | Post-Fulfillment |
 | 10 | `support` | Post-Fulfillment |
-| 11 | `catalog/publish` | Catalog Publishing |
 
 Each request returns an `ACK`. The corresponding `on_*` callback from the BPP arrives at `sandbox-bap` and can be viewed in the BAP logs:
 
@@ -142,6 +141,52 @@ Matches beckn.yaml's `CatalogPullCallbackAction` shape exactly — `status` is a
 ```
 
 No per-catalog metadata (digests, versions, verification outcomes) is returned to the caller — check `docker logs onix-bap` for those details if a crawl isn't returning what you expect.
+
+---
+
+## Catalog Publisher (`catalog/publish`)
+
+`onix-bpp` exposes `/catalog/publish` — a DS-internal trigger that publishes one or more plain Beckn Catalog objects: it diffs each against what was last published (producing a fresh baseline, an incremental change file, or a no-op), signs the result, and writes a manifest + catalog index under the handler's `outputRoot` (`/catalog` in the container, `generic-devkit/data/catalog` on the host — see `docker-compose-generic-local.yml`). Like `catalog/pull`, this is an unsigned, same-operator call, **not** the full signed, async `catalog/publish` Beckn action beckn.yaml describes (context/action envelope, routing, `on_publish` callback) — that is a materially larger scope this devkit does not implement yet. See [beckn-onix's catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the full design background.
+
+### Trigger it
+
+Use the **`publish`** request under the BPP collection's **`2 — Catalog Publishing`** folder, or call it directly:
+
+```bash
+curl -X POST http://localhost:8082/catalog/publish \
+  -H "Content-Type: application/json" \
+  -d '{
+    "catalogs": [
+      { "id": "bpp.example.com/CAT-GENERIC-001", "descriptor": { "name": "Generic Catalog" }, "provider": { "id": "PROV-EXAMPLE-01" }, "resources": [ /* ... */ ] }
+    ]
+  }'
+```
+
+Each catalog's own top-level `"id"` is used verbatim as its catalogId — it is not derived from a domain, so submit the full id you want published. `retire` (a list of catalogIds) and `forceBaseline` (bypass diffing, publish a fresh baseline) are also accepted at the top level, alongside or instead of `catalogs`.
+
+### Sample response
+
+```json
+{
+  "status": "COMPLETED",
+  "results": [
+    { "catalogId": "bpp.example.com/CAT-GENERIC-001", "status": "ACCEPTED", "version": 1 }
+  ]
+}
+```
+
+`status` is always present (`COMPLETED`/`FAILED` for the call as a whole); each entry in `results` borrows beckn.yaml's `CatalogProcessingResult` vocabulary (`ACCEPTED`/`REJECTED`) per catalog — a bad submission (e.g. missing `id`) is `REJECTED` with a `reason`, without failing the rest of the batch:
+
+```json
+{
+  "status": "COMPLETED",
+  "results": [
+    { "catalogId": "", "status": "REJECTED", "reason": "missing catalogId" }
+  ]
+}
+```
+
+A fatal failure (e.g. signing failure) returns `200` with `status: FAILED` and an `error` object instead, matching `catalog/pull`'s convention. Publishing the same catalogId again with edited `resources`/`offers` produces an incremental change file and bumps its version instead of a fresh baseline; publishing it unchanged is a no-op. Inspect `generic-devkit/data/catalog/` on the host to see the generated manifest, catalog index, and versioned catalog files directly.
 
 ---
 

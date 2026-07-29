@@ -160,3 +160,61 @@ modules:
         - validateSchema
         - sign
         - validateAckSign
+
+  # ─────────────────────────────────────────────────────────────────
+  # catalog/publish — DS-internal trigger for the catalog-publisher
+  # plugin. Unsigned, same-operator call (not a network-facing Beckn
+  # action): no validateSign/addRoute/signAck. Given one or more plain
+  # Beckn Catalog objects, it diffs against what was last published
+  # (baseline vs. incremental change file), signs the result, and
+  # writes it under outputRoot. Public catalogs only in this phase.
+  # Listens at: http://localhost:8082/catalog/publish
+  # See beckn-onix's pkg/plugin/implementation/catalogpublisher/README.md
+  # ─────────────────────────────────────────────────────────────────
+  - name: catalogPublish
+    path: /catalog/publish
+    handler:
+      type: catalogPublish
+      role: bpp
+      outputRoot: /catalog
+      httpClientConfig:
+        maxIdleConns: 1000
+        maxIdleConnsPerHost: 200
+        idleConnTimeout: 300s
+        responseHeaderTimeout: 5s
+      plugins:
+        # registry+cache exist only to satisfy keyManager's constructor
+        # (KeyManagerProvider.New always requires a RegistryLookup); the
+        # publisher itself never calls either.
+        registry:
+          id: dediregistry
+          config:
+            timeout: 10
+            retry_max: 3
+            retry_wait_min: 100ms
+            retry_wait_max: 500ms
+        cache:
+          id: cache
+          config:
+            addr: redis:6379
+        keyManager:
+          id: simplekeymanager
+          config:
+            subscriberId: bpp.example.com
+            keyId: 76EU7ofwRCF1aobQkShARrf1PAUsNpHqWUJoynPu9w45YFKmzqaPmy
+            signingPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
+            signingPublicKey: CqVy97DW45bcZPPrWIYGe2ldl9C93NFeVciiAEYsvR0=
+            encrPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
+            encrPublicKey: CqVy97DW45bcZPPrWIYGe2ldl9C93NFeVciiAEYsvR0=
+        catalogPublisher:
+          id: catalogpublisher
+          config:
+            # No subscriberId here -- the handler derives it automatically
+            # from keyManager.config.subscriberId above (the single source
+            # of truth for which keyset gets loaded). Set it explicitly
+            # here only if it must legitimately differ from keyManager's.
+            # indexSchemaURL is likewise not configurable -- it's a
+            # hardcoded package constant pending a shared becknconstants
+            # home for canonical schema URLs.
+            nextUpdateIn: "336h"
+            fileValidityIn: "336h"
