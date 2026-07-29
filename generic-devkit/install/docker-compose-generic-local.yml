@@ -20,7 +20,7 @@ services:
       - beckn_network
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
-      - ../data/catalog:/srv/catalog:ro
+      - ../data/beckn:/srv/beckn:ro
     depends_on:
       - onix-bap
       - onix-bpp
@@ -70,8 +70,8 @@ services:
   #   Caller  (outbound): http://localhost:8082/bpp/caller/
   #   Receiver (inbound): http://localhost:8082/bpp/receiver/
   #   Catalog publish (internal trigger): http://localhost:8082/catalog/publish
-  #     -- writes manifest/index/catalog files under /catalog in the
-  #     container; ../data/catalog on the host, so they persist across
+  #     -- writes manifest/index/catalog files under /beckn in the
+  #     container; ../data/beckn on the host, so they persist across
   #     `docker compose down`/`up` and can be inspected or moved
   #     elsewhere.
   # ============================================================
@@ -91,7 +91,7 @@ services:
       REDIS_ADDR: redis:6379
     volumes:
       - ../config:/app/config
-      - ../data/catalog:/catalog
+      - ../data/beckn:/beckn
     command: ["./server", "--config=/app/config/generic-bpp.yaml"]
 
   # ============================================================

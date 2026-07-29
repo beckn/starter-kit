@@ -146,7 +146,7 @@ No per-catalog metadata (digests, versions, verification outcomes) is returned t
 
 ## Catalog Publisher (`catalog/publish`)
 
-`onix-bpp` exposes `/catalog/publish` — a DS-internal trigger that publishes one or more plain Beckn Catalog objects: it diffs each against what was last published (producing a fresh baseline, an incremental change file, or a no-op), signs the result, and writes a manifest + catalog index under the handler's `outputRoot` (`/catalog` in the container, `generic-devkit/data/catalog` on the host — see `docker-compose-generic-local.yml`). Like `catalog/pull`, this is an unsigned, same-operator call, **not** the full signed, async `catalog/publish` Beckn action beckn.yaml describes (context/action envelope, routing, `on_publish` callback) — that is a materially larger scope this devkit does not implement yet. See [beckn-onix's catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the full design background.
+`onix-bpp` exposes `/catalog/publish` — a DS-internal trigger that publishes one or more plain Beckn Catalog objects: it diffs each against what was last published (producing a fresh baseline, an incremental change file, or a no-op), signs the result, and writes a manifest + catalog index under the handler's `outputRoot` (`/beckn` in the container, `generic-devkit/data/beckn` on the host — see `docker-compose-generic-local.yml`). Like `catalog/pull`, this is an unsigned, same-operator call, **not** the full signed, async `catalog/publish` Beckn action beckn.yaml describes (context/action envelope, routing, `on_publish` callback) — that is a materially larger scope this devkit does not implement yet. See [beckn-onix's catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the full design background.
 
 ### Trigger it
 
@@ -186,7 +186,7 @@ Each catalog's own top-level `"id"` is used verbatim as its catalogId — it is 
 }
 ```
 
-A fatal failure (e.g. signing failure) returns `200` with `status: FAILED` and an `error` object instead, matching `catalog/pull`'s convention. Publishing the same catalogId again with edited `resources`/`offers` produces an incremental change file and bumps its version instead of a fresh baseline; publishing it unchanged is a no-op. Inspect `generic-devkit/data/catalog/` on the host to see the generated manifest, catalog index, and versioned catalog files directly.
+A fatal failure (e.g. signing failure) returns `200` with `status: FAILED` and an `error` object instead, matching `catalog/pull`'s convention. Publishing the same catalogId again with edited `resources`/`offers` produces an incremental change file and bumps its version instead of a fresh baseline; publishing it unchanged is a no-op. Inspect `generic-devkit/data/beckn/` on the host to see the generated manifest, catalog index, and versioned catalog files directly.
 
 ---
 

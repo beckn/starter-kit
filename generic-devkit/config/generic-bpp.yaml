@@ -176,7 +176,7 @@ modules:
     handler:
       type: catalogPublish
       role: bpp
-      outputRoot: /catalog
+      outputRoot: /beckn
       httpClientConfig:
         maxIdleConns: 1000
         maxIdleConnsPerHost: 200
@@ -219,10 +219,10 @@ modules:
             nextUpdateIn: "336h"
             fileValidityIn: "336h"
             # catalogBaseURL: the one public URL prefix outputRoot is
-            # served under -- beckn-router's ngrok tunnel, at the /catalog/*
-            # route added to install/Caddyfile (serves ../data/catalog
+            # served under -- beckn-router's ngrok tunnel, at the /beckn/*
+            # route added to install/Caddyfile (serves ../data/beckn
             # statically). Update this if your ngrok domain changes.
-            catalogBaseURL: "https://angular-absently-gab.ngrok-free.dev/catalog"
+            catalogBaseURL: "https://angular-absently-gab.ngrok-free.dev/beckn"
         # Validates submitted catalogs before they're published: the
         # handler wraps them in {context:{action:"catalog/publish"},
         # message:{catalogs:[...]}} and validates that envelope against
