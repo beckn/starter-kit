@@ -20,6 +20,7 @@ services:
       - beckn_network
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile
+      - ../data/catalog:/srv/catalog:ro
     depends_on:
       - onix-bap
       - onix-bpp

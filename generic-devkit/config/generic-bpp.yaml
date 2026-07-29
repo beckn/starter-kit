@@ -218,3 +218,8 @@ modules:
             # home for canonical schema URLs.
             nextUpdateIn: "336h"
             fileValidityIn: "336h"
+            # catalogBaseURL: the one public URL prefix outputRoot is
+            # served under -- beckn-router's ngrok tunnel, at the /catalog/*
+            # route added to install/Caddyfile (serves ../data/catalog
+            # statically). Update this if your ngrok domain changes.
+            catalogBaseURL: "https://angular-absently-gab.ngrok-free.dev/catalog"
