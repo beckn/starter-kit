@@ -223,3 +223,15 @@ modules:
             # route added to install/Caddyfile (serves ../data/catalog
             # statically). Update this if your ngrok domain changes.
             catalogBaseURL: "https://angular-absently-gab.ngrok-free.dev/catalog"
+        # Validates submitted catalogs before they're published: the
+        # handler wraps them in {context:{action:"catalog/publish"},
+        # message:{catalogs:[...]}} and validates that envelope against
+        # catalog/publish's real message.catalogs[]:Catalog[] schema (no
+        # type/location set -- same as bppTxnReceiver/bppTxnCaller above,
+        # so it resolves the canonical protocol-specifications-v2 beckn.yaml
+        # via becknConstants). checkPolicy (opapolicychecker) intentionally
+        # left out here -- not needed yet.
+        schemaValidator:
+          id: schemav2validator
+          config:
+            cacheTTL: "3600"
