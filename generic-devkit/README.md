@@ -10,7 +10,7 @@ select → on_select → init → on_init → confirm → on_confirm
 → status / on_status  →  track / on_track
 → update / on_update  →  cancel / on_cancel
 → rate / on_rate  →  support / on_support
-(+ catalog/pull, + catalog/publish -- both DS-internal triggers, not part of the signed transaction flow above)
+(+ catalog/publish -- a DS-internal trigger, not part of the signed transaction flow above)
 ```
 
 ---
@@ -92,61 +92,9 @@ Use the **BPP collection** to simulate BPP-initiated callbacks directly (e.g. un
 
 ---
 
-## Catalog Crawler (`catalog/pull`)
-
-`onix-bap` also exposes `/catalog/pull` — a DS-internal trigger that fetches and verifies a provider node's published manifest → index → catalog chain (self-hosted, DeDi-signed catalogs), independent of the discover/select/... transaction flow above. Unlike the other endpoints, it's an unsigned, same-operator call (no `Authorization` header) — see [beckn-onix's catalogcrawler README](https://github.com/beckn/beckn-onix/blob/catalog-crawler/pkg/plugin/implementation/catalogcrawler/README.md) for the full design background.
-
-### Trigger it
-
-Use the **`catalog pull`** request under the BAP collection's **`3 — Catalog`** folder, or call it directly:
-
-```bash
-curl -X POST http://localhost:8081/catalog/pull \
-  -H "Content-Type: application/json" \
-  -d '{
-    "receiverId": "https://angular-absently-gab.ngrok-free.dev",
-    "networkId": "beckn.one/testnet",
-    "mode": "full"
-  }'
-```
-
-`receiverId` is the provider node's address to crawl (for now, treated as a literal domain/URI, not resolved via DID). `mode` is `full` or `incremental` (currently behave identically — incremental digest-skip isn't implemented yet).
-
-### Sample response
-
-```json
-{
-  "status": "COMPLETED",
-  "catalogs": [
-    {
-      "id": "CAT-GENERIC-001",
-      "descriptor": { "name": "Generic Catalog", "shortDesc": "Daily essentials  generic items" },
-      "provider": { "id": "PROV-EXAMPLE-01", "descriptor": { "name": "BP Pvt Ltd" }, "availableAt": [ /* ... */ ] },
-      "resources": [ /* ... items, as published by the provider ... */ ],
-      "offers": [ /* ... offers ... */ ],
-      "validity": { "startDate": "2026-01-01T00:00:00Z", "endDate": "2026-12-31T23:59:59Z" },
-      "isActive": true
-    }
-  ]
-}
-```
-
-Matches beckn.yaml's `CatalogPullCallbackAction` shape exactly — `status` is always present (`COMPLETED`/`FAILED`), `catalogs` only on success. A failed crawl (unreachable provider, bad `receiverId`) still returns `200`, with the failure carried in the body instead:
-
-```json
-{
-  "status": "FAILED",
-  "error": { "code": "BIZ_CRAWL_FAILED", "message": "catalogcrawler: fetching manifest: ..." }
-}
-```
-
-No per-catalog metadata (digests, versions, verification outcomes) is returned to the caller — check `docker logs onix-bap` for those details if a crawl isn't returning what you expect.
-
----
-
 ## Catalog Publisher (`catalog/publish`)
 
-`onix-bpp` exposes `/catalog/publish` — a DS-internal trigger that publishes one or more plain Beckn Catalog objects: it diffs each against what was last published (producing a fresh baseline, an incremental change file, or a no-op), signs the result, and writes a manifest + catalog index under the handler's `outputRoot` (`/beckn` in the container, `generic-devkit/data/beckn` on the host — see `docker-compose-generic-local.yml`). Like `catalog/pull`, this is an unsigned, same-operator call, **not** the full signed, async `catalog/publish` Beckn action beckn.yaml describes (context/action envelope, routing, `on_publish` callback) — that is a materially larger scope this devkit does not implement yet. See [beckn-onix's catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the full design background.
+`onix-bpp` exposes `/catalog/publish` — a DS-internal trigger that publishes one or more plain Beckn Catalog objects: it diffs each against what was last published (producing a fresh baseline, an incremental change file, or a no-op), signs the result, and writes a manifest + catalog index under the handler's `outputRoot` (`/beckn` in the container, `generic-devkit/data/beckn` on the host — see `docker-compose-generic-local.yml`). This is an unsigned, same-operator call, **not** the full signed, async `catalog/publish` Beckn action beckn.yaml describes (context/action envelope, routing, `on_publish` callback) — that is a materially larger scope this devkit does not implement yet. See [beckn-onix's catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the full design background.
 
 ### Trigger it
 
@@ -156,13 +104,19 @@ Use the **`publish`** request under the BPP collection's **`2 — Catalog Publis
 curl -X POST http://localhost:8082/catalog/publish \
   -H "Content-Type: application/json" \
   -d '{
-    "catalogs": [
-      { "id": "bpp.example.com/CAT-GENERIC-001", "descriptor": { "name": "Generic Catalog" }, "provider": { "id": "PROV-EXAMPLE-01" }, "resources": [ /* ... */ ] }
-    ]
+    "context": { "action": "catalog/publish" },
+    "message": {
+      "catalogs": [
+        { "id": "staging.p-node.fabric.nfh.global/CAT-GENERIC-001", "descriptor": { "name": "Generic Catalog" }, "provider": { "id": "PROV-EXAMPLE-01" }, "resources": [ /* ... */ ] }
+      ],
+      "publishDirectives": [
+        { "catalogId": "staging.p-node.fabric.nfh.global/CAT-GENERIC-001", "visibleTo": ["beckn.one/testnet", "nfh.global/testnet"], "catalogType": "REGULAR" }
+      ]
+    }
   }'
 ```
 
-Each catalog's own top-level `"id"` is used verbatim as its catalogId — it is not derived from a domain, so submit the full id you want published. `retire` (a list of catalogIds) and `forceBaseline` (bypass diffing, publish a fresh baseline) are also accepted at the top level, alongside or instead of `catalogs`.
+Request body matches beckn.yaml's real `CatalogPublishAction` envelope shape (`context`/`message.catalogs[]`/`message.publishDirectives[]`) — `context` only carries `action` since every other `Context` field is optional and none are meaningful for this unsigned, same-operator call. `publishDirectives[]` entries are matched to a catalog by `catalogId`; `catalogType` (`MASTER`/`REGULAR`) is required by the spec, and `visibleTo` restricts which networks may fetch that catalog (empty/omitted means public) — both map straight onto the same-named fields in the published catalog index. Each catalog's own top-level `"id"` is used verbatim as its catalogId — it is not derived from a domain, so submit the full id you want published. `retire` (a list of catalogIds) and `forceBaseline` (bypass diffing, publish a fresh baseline) are this handler's own additions with no beckn.yaml equivalent — accepted as siblings of `context`/`message`, alongside or instead of `message.catalogs`.
 
 ### Sample response
 
@@ -170,7 +124,7 @@ Each catalog's own top-level `"id"` is used verbatim as its catalogId — it is 
 {
   "status": "COMPLETED",
   "results": [
-    { "catalogId": "bpp.example.com/CAT-GENERIC-001", "status": "ACCEPTED", "version": 1 }
+    { "catalogId": "staging.p-node.fabric.nfh.global/CAT-GENERIC-001", "status": "ACCEPTED", "version": 1 }
   ]
 }
 ```
@@ -186,7 +140,7 @@ Each catalog's own top-level `"id"` is used verbatim as its catalogId — it is 
 }
 ```
 
-A fatal failure (e.g. signing failure) returns `200` with `status: FAILED` and an `error` object instead, matching `catalog/pull`'s convention. Publishing the same catalogId again with edited `resources`/`offers` produces an incremental change file and bumps its version instead of a fresh baseline; publishing it unchanged is a no-op. Inspect `generic-devkit/data/beckn/` on the host to see the generated manifest, catalog index, and versioned catalog files directly.
+A fatal failure (e.g. signing failure) returns `200` with `status: FAILED` and an `error` object instead. Publishing the same catalogId again with edited `resources`/`offers` produces an incremental change file and bumps its version instead of a fresh baseline; publishing it unchanged is a no-op. Inspect `generic-devkit/data/beckn/` on the host to see the generated manifest, catalog index, and versioned catalog files directly.
 
 ---
 

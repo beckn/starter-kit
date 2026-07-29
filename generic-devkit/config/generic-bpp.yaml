@@ -44,8 +44,6 @@ modules:
         keyManager:
           id: simplekeymanager
           config:
-            # Testnet sandbox subscriber registered on beckn.one/testnet
-            # Replace with your own registered subscriber ID and keys for production
             subscriberId: bpp.example.com
             keyId: 76EU7ofwRCF1aobQkShARrf1PAUsNpHqWUJoynPu9w45YFKmzqaPmy
             signingPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
@@ -200,12 +198,12 @@ modules:
         keyManager:
           id: simplekeymanager
           config:
-            subscriberId: bpp.example.com
-            keyId: 76EU7ofwRCF1aobQkShARrf1PAUsNpHqWUJoynPu9w45YFKmzqaPmy
-            signingPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
-            signingPublicKey: CqVy97DW45bcZPPrWIYGe2ldl9C93NFeVciiAEYsvR0=
-            encrPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
-            encrPublicKey: CqVy97DW45bcZPPrWIYGe2ldl9C93NFeVciiAEYsvR0=
+            subscriberId: staging.p-node.fabric.nfh.global
+            keyId: 76EU7aSyU6nCGC9i2svAkZUwJvCpBx92LvBrAZR48YVtRg3SjH86vM
+            signingPrivateKey: psy4wPmeHbD7rkF3JIYL2hbNien62BNCtr6T1C2DoaI=
+            signingPublicKey: gFoAD0w7SgnB3UaqMr7wK0uq4J0XWmfo4g+WPyhIXgY=
+            encrPrivateKey: psy4wPmeHbD7rkF3JIYL2hbNien62BNCtr6T1C2DoaI=
+            encrPublicKey: gFoAD0w7SgnB3UaqMr7wK0uq4J0XWmfo4g+WPyhIXgY=
         catalogPublisher:
           id: catalogpublisher
           config:
@@ -223,6 +221,14 @@ modules:
             # route added to install/Caddyfile (serves ../data/beckn
             # statically). Update this if your ngrok domain changes.
             catalogBaseURL: "https://angular-absently-gab.ngrok-free.dev/beckn"
+            # manifestSubscriberId: the DeDi-native namespace/registry/
+            # recordName path for this node's manifest record -- NOT the
+            # same as keyManager.config.subscriberId above (a plain Beckn
+            # subscriberId used for keyset lookup/signing; setting *that*
+            # to a 3-part path would break signing instead). Used only by
+            # the manifestLoader check below. Replace with your real
+            # record's namespace/registry/recordName.
+            manifestSubscriberId: "nfh.global/staging-nodes/staging-p-node"
         # Validates submitted catalogs before they're published: the
         # handler wraps them in {context:{action:"catalog/publish"},
         # message:{catalogs:[...]}} and validates that envelope against
@@ -235,3 +241,14 @@ modules:
           id: schemav2validator
           config:
             cacheTTL: "3600"
+        # Read-only: checks (via dediregistry, using catalogPublisher.
+        # config.manifestSubscriberId above -- same self-lookup
+        # schemaversionmediator already does at cold start, via its own
+        # nodeId config) whether the node manifest already declares this
+        # publisher's catalog index under catalog.catalogIndexes. If not, a
+        # proposed updated manifest is staged locally under
+        # outputRoot/index/node-manifest.staged.yaml and a warning is
+        # returned -- the real manifest on DeDi is never written to by
+        # this handler; review the staged file and push it yourself.
+        manifestLoader:
+          id: manifestloader
