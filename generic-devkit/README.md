@@ -134,7 +134,7 @@ Use the **BPP collection** to simulate BPP-initiated callbacks directly (e.g. un
 
 ### Registry & Keys
 
-The devkit ships with **testnet sandbox credentials** pre-registered on `beckn.one/testnet` via the DeDi registry (`https://api.dev.beckn.io/registry/dedi`).
+The devkit ships with **testnet sandbox credentials** pre-registered on `beckn.one/testnet` via the DeDi registry (`https://fabric.nfh.global/registry/dedi`).
 
 To register your own subscriber IDs and keys, follow the [DeDi registration guide](https://developers.becknprotocol.io/) and update the `keyManager` block in `generic-bap.yaml` / `generic-bpp.yaml`.
 
