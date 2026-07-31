@@ -207,48 +207,20 @@ modules:
         catalogPublisher:
           id: catalogpublisher
           config:
-            # No subscriberId here -- the handler derives it automatically
-            # from keyManager.config.subscriberId above (the single source
-            # of truth for which keyset gets loaded). Set it explicitly
-            # here only if it must legitimately differ from keyManager's.
-            # indexSchemaURL is likewise not configurable -- it's a
-            # hardcoded package constant pending a shared becknconstants
-            # home for canonical schema URLs.
+            # subscriberId derives from keyManager.config.subscriberId above.
             nextUpdateIn: "336h"
             fileValidityIn: "336h"
-            # catalogBaseURL: the one public URL prefix outputRoot is
-            # served under -- beckn-router's ngrok tunnel, at the /beckn/*
-            # route added to install/Caddyfile (serves ../data/beckn
-            # statically). Update this if your ngrok domain changes.
+            # Public URL prefix outputRoot is served under (beckn-router's
+            # ngrok tunnel, /beckn/* route in install/Caddyfile). Update if
+            # your ngrok domain changes.
             catalogBaseURL: "https://angular-absently-gab.ngrok-free.dev/beckn"
-            # manifestSubscriberId: the DeDi-native namespace/registry/
-            # recordName path for this node's manifest record -- NOT the
-            # same as keyManager.config.subscriberId above (a plain Beckn
-            # subscriberId used for keyset lookup/signing; setting *that*
-            # to a 3-part path would break signing instead). Used only by
-            # the manifestLoader check below. Replace with your real
-            # record's namespace/registry/recordName.
-            manifestSubscriberId: "nfh.global/staging-nodes/staging-p-node"
-        # Validates submitted catalogs before they're published: the
-        # handler wraps them in {context:{action:"catalog/publish"},
-        # message:{catalogs:[...]}} and validates that envelope against
-        # catalog/publish's real message.catalogs[]:Catalog[] schema (no
-        # type/location set -- same as bppTxnReceiver/bppTxnCaller above,
-        # so it resolves the canonical protocol-specifications-v2 beckn.yaml
-        # via becknConstants). checkPolicy (opapolicychecker) intentionally
-        # left out here -- not needed yet.
+            # Read-only, warn-only: checks whether this node's DeDi registry
+            # record links this catalog index via meta.catalog_index_url.
+            checkCatalogIndexLink: "true"
+        # Validates submitted catalogs before they're published against
+        # catalog/publish's real schema (protocol-specifications-v2 beckn.yaml
+        # via becknConstants). checkPolicy left out -- not needed yet.
         schemaValidator:
           id: schemav2validator
           config:
             cacheTTL: "3600"
-        # Read-only: checks (via dediregistry, using catalogPublisher.
-        # config.manifestSubscriberId above -- same self-lookup
-        # schemaversionmediator already does at cold start, via its own
-        # nodeId config) whether the node manifest already declares this
-        # publisher's catalog index under catalog.catalogIndexes. If not, a
-        # proposed updated manifest is staged locally under
-        # outputRoot/index/node-manifest.staged.yaml and a warning is
-        # returned -- the real manifest on DeDi is never written to by
-        # this handler; review the staged file and push it yourself.
-        manifestLoader:
-          id: manifestloader
