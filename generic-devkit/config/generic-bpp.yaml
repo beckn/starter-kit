@@ -209,7 +209,6 @@ modules:
           config:
             # subscriberId derives from keyManager.config.subscriberId above.
             nextUpdateIn: "336h"
-            fileValidityIn: "336h"
             # Public URL prefix outputRoot is served under (beckn-router's
             # ngrok tunnel, /beckn/* route in install/Caddyfile). Update if
             # your ngrok domain changes.

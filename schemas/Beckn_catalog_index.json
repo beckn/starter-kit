@@ -2,12 +2,12 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://schema.beckn.org/dedi/beckn-catalog-index-schema.json",
   "title": "Beckn Catalog Index",
-  "description": "A publisher's catalog index: a plain Beckn file (not a DeDi file, and not required to be signed as a whole -- trust rides on each catalog file's own per-entry signature). Lists every catalog the publisher has, each carrying identity, lifecycle status, visibility, and either a baseline + change-file chain (ACTIVE) or a tombstone (RETIRED).",
+  "description": "A publisher's catalog index: a plain Beckn file (not a DeDi file, and not required to be signed as a whole -- trust rides on each catalog entry's own self-signature). Lists every catalog the publisher has, each carrying identity, lifecycle status, visibility, and either a baseline + change-file chain (ACTIVE) or a tombstone (RETIRED).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["participantId", "version", "catalogs"],
+  "required": ["nodeId", "version", "catalogs"],
   "properties": {
-    "participantId": {
+    "nodeId": {
       "type": "string",
       "description": "The publisher's identity -- a domain (e.g. \"open-economy.nfh.global\"). Every catalogId in this index is scoped under it."
     },
@@ -30,7 +30,7 @@
   "$defs": {
     "catalogEntry": {
       "type": "object",
-      "required": ["catalogId", "status"],
+      "required": ["catalogId", "status", "signature"],
       "properties": {
         "catalogId": {
           "type": "string",
@@ -40,6 +40,9 @@
           "type": "string",
           "enum": ["ACTIVE", "RETIRED"],
           "description": "Lifecycle state. RETIRED is a tombstone -- no files, no baseline, no changes."
+        },
+        "signature": {
+          "$ref": "#/$defs/entrySignature"
         }
       },
       "if": {
@@ -47,10 +50,11 @@
       },
       "then": {
         "additionalProperties": false,
-        "required": ["catalogId", "status", "retiredAt"],
+        "required": ["catalogId", "status", "retiredAt", "signature"],
         "properties": {
           "catalogId": true,
           "status": true,
+          "signature": true,
           "retiredAt": {
             "type": "string",
             "format": "date-time",
@@ -60,10 +64,11 @@
       },
       "else": {
         "additionalProperties": false,
-        "required": ["catalogId", "status", "catalogType", "baseline"],
+        "required": ["catalogId", "status", "catalogType", "baseline", "signature"],
         "properties": {
           "catalogId": true,
           "status": true,
+          "signature": true,
           "catalogType": {
             "type": "string",
             "enum": ["MASTER", "REGULAR"],
@@ -73,12 +78,7 @@
             "type": "array",
             "items": { "type": "string" },
             "minItems": 1,
-            "description": "Networks this catalog is restricted to. Absent or omitted means public -- there is no explicit \"public\" marker, the field is simply not present."
-          },
-          "authMethods": {
-            "type": "array",
-            "items": { "$ref": "#/$defs/authMethod" },
-            "description": "How a crawler authenticates a restricted download. Only meaningful when networkIds is present. A list, not a single value, so new methods extend without changing the shape."
+            "description": "Discovery-service relevance filter, not access control -- catalog access is always public (there is no restricted catalog). Absent means the publisher has declared no particular network relevance; a network-scoped Discovery service still decides indexing based on its own membership registry, not this field alone."
           },
           "schemaTypes": {
             "type": "array",
@@ -94,7 +94,7 @@
           "changes": {
             "type": "array",
             "items": { "$ref": "#/$defs/fileEntry" },
-            "description": "Change files since the baseline, in version order. May include a lightweight forward-pointer entry carrying only \"version\" (no url/digest/signature yet), signaling a newer version exists before its file is ready to serve."
+            "description": "Change files since the baseline, in version order. May include a lightweight forward-pointer entry carrying only \"version\" (no url/size/digest yet), signaling a newer version exists before its file is ready to serve."
           }
         }
       }
@@ -112,31 +112,29 @@
         "url": {
           "type": "string",
           "format": "uri",
-          "description": "Absolute, immutable URL of this file. A new version is always a new URL -- nothing is overwritten in place."
+          "description": "Absolute, immutable URL of this self-signed file (see CatalogFile/CatalogChangeFile). A new version is always a new URL -- nothing is overwritten in place."
         },
         "size": {
           "type": "integer",
           "minimum": 0,
-          "description": "Byte size of the file at url. Required whenever url/digest/signature are present -- part of the signed tuple (see signature), and what makes the fetch-baseline-instead cutover rule computable before downloading anything."
+          "description": "Byte size of the self-signed file at url (the whole published file, signature included). Required whenever url/digest are present -- what makes the fetch-baseline-instead cutover rule computable before downloading anything."
         },
         "digest": {
           "type": "string",
           "pattern": "^sha-256:[0-9a-f]{64}$",
-          "description": "SHA-256 digest of the file at url, prefixed with the algorithm name."
-        },
-        "signature": { "$ref": "#/$defs/signature" }
+          "description": "SHA-256 digest of the self-signed file at url (the whole published file, signature included), prefixed with the algorithm name. The file's own authenticity comes from its embedded self-signature, not from this digest alone."
+        }
       },
       "dependencies": {
-        "url": ["size", "digest", "signature"],
-        "size": ["url", "digest", "signature"],
-        "digest": ["url", "size", "signature"],
-        "signature": ["url", "size", "digest"]
+        "url": ["size", "digest"],
+        "size": ["url", "digest"],
+        "digest": ["url", "size"]
       }
     },
-    "signature": {
+    "entrySignature": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["keyId", "value", "validUntil"],
+      "required": ["keyId", "value"],
       "properties": {
         "keyId": {
           "type": "string",
@@ -144,37 +142,7 @@
         },
         "value": {
           "type": "string",
-          "description": "Signature value. Ed25519 (or ES256) over the JCS canonicalization of {catalogId, version, url, size, digest, validUntil} for the file entry this signature is attached to -- a tuple, not a bare hash, so it cannot be replayed for a different file, version, or past its validity window. May equally be encoded as a detached JWS instead of a plain signature value; the encoding is a schema decision, not a semantic one."
-        },
-        "validUntil": {
-          "type": "string",
-          "format": "date-time",
-          "description": "Caps how long this signed entry may be presented, independent of the index's own next_update."
-        }
-      }
-    },
-    "authMethod": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["method", "header", "signedHeaders", "freshnessSeconds"],
-      "properties": {
-        "method": {
-          "type": "string",
-          "description": "e.g. \"signed-request\" -- self-describing; a crawler reads this object and knows what to build. Extend the enum as new methods are added; do not change this shape to add one."
-        },
-        "header": {
-          "type": "string",
-          "description": "The HTTP header the crawler's signature goes in (e.g. \"Authorization\")."
-        },
-        "signedHeaders": {
-          "type": "array",
-          "items": { "type": "string" },
-          "description": "The standard Beckn HTTP Signature's signed pseudo-headers/headers (e.g. [\"(created)\", \"(expires)\", \"(request-target)\", \"host\", \"digest\"]). No custom challenge fields -- the signature standard's own request binding is what ties a signature to one URL. The verification algorithm itself is never declared here; a gateway takes it from the requester's registered key."
-        },
-        "freshnessSeconds": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Replay bound: how long after (created) a signed request remains acceptable. 60 is the spec's suggested default for a machine-to-machine fetch."
+          "description": "Ed25519 (or ES256) signature over the JCS canonicalization of this catalog entry with the signature field itself removed -- catalogId, status, and (for ACTIVE catalogs) catalogType, networkIds, schemaTypes, baseline, and changes together, so no field or file reference can be added, dropped, or swapped without breaking the whole entry's signature. Carries no expiry; the index's own next_update bounds staleness instead."
         }
       }
     }
