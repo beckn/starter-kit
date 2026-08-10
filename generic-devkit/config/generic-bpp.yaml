@@ -216,6 +216,15 @@ modules:
             # Read-only, warn-only: checks whether this node's DeDi registry
             # record links this catalog index via meta.catalog_index_url.
             checkCatalogIndexLink: "true"
+            # Both default to "true" already if omitted -- set explicitly
+            # here for visibility. publishLatest: maintains a full,
+            # overwritten-in-place "latest" CatalogFile alongside
+            # baseline/changes[] (NFH-014). gzip: serves every catalog
+            # file gzip-compressed, signaled by a .json.gz URL extension
+            # (NFH-014 §10.1) -- digest/signature are always computed
+            # against the decompressed content either way.
+            publishLatest: "true"
+            gzip: "true"
         # Validates submitted catalogs before they're published against
         # catalog/publish's real schema (protocol-specifications-v2 beckn.yaml
         # via becknConstants). checkPolicy left out -- not needed yet.
