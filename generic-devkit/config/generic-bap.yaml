@@ -84,7 +84,6 @@ modules:
               contextKeys: transactionId,messageId
               role: bap
       steps:
-        - validateSign
         - addRoute
         - validateSchema
         - signAck

@@ -20,11 +20,16 @@ routingRules:
       - rate
       - support
 
-  # Discovery: routed to Discover Service
+  # Discovery: routed through the discovr onix instance's bapReceiver module
+  # (docker-compose.onix-crawler.yml, onix-config/config.yaml), which fronts
+  # discover for the world and forwards internally to catalog-discover-job
+  # (see beckn-discovr/onix-config/routing-bap-receiver.yaml). Port 8091 is
+  # onix-crawler's published port in that stack.
   - domain: "beckn.one/testnet"
     version: "2.0.0"
     targetType: "url"
     target:
-      url: "https://34.93.165.42.sslip.io/beckn"   # Replace with your Discover service endpoint
+      #url: "https://34.93.165.42.sslip.io/beckn"   # Replace with your Discover service endpoint
+      url: "http://host.docker.internal:8091/bap/receiver"
     endpoints:
       - discover

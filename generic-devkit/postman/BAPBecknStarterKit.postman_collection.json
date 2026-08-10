@@ -22,7 +22,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\":[]\n  },\n  \"message\": {\n        \"intent\": {\n            \"filters\": {\n                \"type\": \"jsonpath\",\n                \"expression\":\"$.catalogs[*].offers[*] ? (@.offerAttributes.tariffModel == 'FLAT_DISCOUNT' && @.offerAttributes.priceSpecification.price < 100)\"  \n            }\n        }\n  }\n}",
+							"raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\":[]\n  },\n  \"message\": {\n        \"intent\": {\n            \"filters\": {\n                \"type\": \"jsonpath\",\n                \"expression\":\"$.catalogs[*] ? (@.id == \\\"staging.p-node.fabric.nfh.global/CAT-GENERIC-001\\\")\"  \n            }\n        }\n  }\n}",
 							"options": {
 								"raw": {
 									"language": "json"
