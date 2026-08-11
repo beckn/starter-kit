@@ -225,6 +225,13 @@ modules:
             # against the decompressed content either way.
             publishLatest: "true"
             gzip: "true"
+            # Automatic compaction (NFH-014 §10.1) is off by default (both
+            # 0) -- uncomment either to auto-compact a catalog's baseline
+            # instead of adding another change file, once it already has
+            # this many pending changes, or once their combined size
+            # reaches this fraction of the baseline's own size:
+            # compactionChangeCountThreshold: "20"
+            # compactionSizeRatioThreshold: "0.5"
         # Validates submitted catalogs before they're published against
         # catalog/publish's real schema (protocol-specifications-v2 beckn.yaml
         # via becknConstants). checkPolicy left out -- not needed yet.
