@@ -95,7 +95,7 @@ Use the **BPP collection** for two things outside the automatic BAP-driven flow 
 
 ## Catalog Publisher (`catalog/publish`)
 
-`onix-bpp` exposes `/catalog/publish` — a DS-internal trigger that publishes one or more plain Beckn Catalog objects: it diffs each against what was last published (producing a fresh baseline, an incremental change file, or a no-op), signs the result, and writes a manifest + catalog index under the handler's `outputRoot` (`/beckn` in the container, `generic-devkit/data/beckn` on the host — see `docker-compose-generic-local.yml`). This is an unsigned, same-operator call, **not** the full signed, async `catalog/publish` Beckn action beckn.yaml describes (context/action envelope, routing, `on_publish` callback) — that is a materially larger scope this devkit does not implement yet. See [beckn-onix's catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the full design background.
+`onix-bpp` exposes `/catalog/publish` — a DS-internal trigger that publishes one or more plain Beckn Catalog objects: it diffs each against what was last published (producing a fresh baseline, an incremental change file, or a no-op), signs the result, and writes a manifest + catalog index under the handler's `outputRoot` (`/beckn` in the container, `generic-devkit/data/beckn` on the host — see "Where the files get written" below). This is an unsigned, same-operator call, **not** the full signed, async `catalog/publish` Beckn action beckn.yaml describes (context/action envelope, routing, `on_publish` callback) — that is a materially larger scope this devkit does not implement yet. See [beckn-onix's catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the full design background.
 
 ### Prerequisite for your published catalogs to be discoverable
 
@@ -146,6 +146,25 @@ Request body matches beckn.yaml's real `CatalogPublishAction` envelope shape (`c
 ```
 
 A fatal failure (e.g. signing failure) returns `200` with `status: FAILED` and an `error` object instead. Publishing the same catalogId again with edited `resources`/`offers` produces an incremental change file and bumps its version instead of a fresh baseline; publishing it unchanged is a no-op. Inspect `generic-devkit/data/beckn/` on the host to see the generated manifest, catalog index, and versioned catalog files directly.
+
+### Where the files get written
+
+`catalogPublish`'s `outputRoot: /beckn` (set in `generic-bpp.yaml`) is bind-mounted to `generic-devkit/data/beckn/` on the host (`docker-compose-generic.yml`), so every published catalog lands there directly -- no need to exec into the container to see it:
+
+```
+generic-devkit/data/beckn/
+  index/
+    becknCatalogs.index.json          # the catalog index -- one entry per catalogId, with baseline/changes/latest pointers
+  catalogs/
+    <localName>.v<version>.json.gz    # a baseline (e.g. CAT-GENERIC-001.v1.json.gz)
+    <localName>.latest.json.gz        # overwritten-in-place pointer at the current version (publishLatest, default true)
+    changes/
+      <localName>.v<version>.changes.json.gz   # an incremental change file (e.g. CAT-GENERIC-001.v2.changes.json.gz)
+```
+
+`<localName>` is the catalog's `catalogId` with any `domain/` prefix stripped. Files are `.gz` by default (`gzip: true` in `catalogPublisher`'s config) -- `digest`/`size` in the index are always computed against the decompressed content regardless.
+
+The index's `baseline`/`changes[]`/`latest` entries carry full URLs, not local paths -- each is `catalogBaseURL` (also set in `generic-bpp.yaml`, e.g. `https://your-tunnel.ngrok-free.dev/beckn`) plus the file's path under `outputRoot`. `catalogBaseURL` must match wherever `outputRoot` is actually being served from publicly (`beckn-router`'s Caddy `/beckn/*` route over your ngrok tunnel) -- update it if your ngrok domain changes, or the URLs a crawler tries to fetch will 404.
 
 ### Migrating from the old catalog/publish API to the decentralized catalog
 
