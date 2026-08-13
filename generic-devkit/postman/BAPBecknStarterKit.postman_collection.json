@@ -191,8 +191,8 @@
 		},
 		{
 			"key": "public_url",
-			"value": "http://beckn-router:9000",
-			"description": "Base URL for bapUri / bppUri callbacks. Default routes within Docker via beckn-router. For external services (discover/publish): change to https://your-domain.ngrok-free.app"
+			"value": "https://angular-absently-gab.ngrok-free.dev",
+			"description": "Base URL for bapUri / bppUri callbacks. Set to the ngrok tunnel (not host.docker.internal / beckn-router) because discover now targets a separate remote discovr stack that cannot reach a Docker-internal hostname for the async on_discover callback."
 		},
 		{
 			"key": "bap_uri",
