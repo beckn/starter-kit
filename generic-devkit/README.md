@@ -142,6 +142,116 @@ Request body matches beckn.yaml's real `CatalogPublishAction` envelope shape (`c
 
 A fatal failure (e.g. signing failure) returns `200` with `status: FAILED` and an `error` object instead. Publishing the same catalogId again with edited `resources`/`offers` produces an incremental change file and bumps its version instead of a fresh baseline; publishing it unchanged is a no-op. Inspect `generic-devkit/data/beckn/` on the host to see the generated manifest, catalog index, and versioned catalog files directly.
 
+### Migrating from the old catalog/publish API to the decentralized catalog
+
+If you're publishing catalogs today via `catalog/publish` with ACK/NACK
+responses, subscription CRUD (`catalog/subscription`), or a central
+Cataloging Service, this section is for you. The model this plugin
+implements is a different shape entirely: you publish plain files to your
+own storage, and DeDi + a crawler do the rest. Nothing about your actual
+catalog *content* (the `Catalog`, `Resource`, `Offer` schemas) changes --
+what changes is how it gets from you to a Discovery Service.
+
+#### The conceptual shift
+
+**Before:** you called a network API (`catalog/publish`) and got an
+ACK/NACK back. A central Cataloging Service stored your catalog, handled
+subscriptions, and served `catalog/pull`/`catalog/search` to consumers.
+
+**Now:** you publish immutable JSON files to storage you already control
+(any CDN, object store, or static host) via this plugin's `Publish` call,
+exposed here as a DS-internal `catalog/publish` trigger with no ACK/NACK
+envelope at all -- see "Trigger it" above. Once your files are on your
+storage and your DeDi record's `meta.catalog_index_urls` (a list of
+`{url}` entries, per NFH-014 CON-TBD-33 -- a node may host more than one
+catalog index) points at your index, crawlers discover and pull your
+catalogs on their own schedule. There is no central service to call,
+subscribe to, or wait on.
+
+#### What you need to do
+
+Short version: **pick some storage, call `catalog/publish` against your
+own adapter instead of a central service, and set one field on a record
+you already have.** That's the whole migration -- there's no server to
+stand up, no subscription list to manage, and no ACK/NACK handshake to
+get right.
+
+1. **Pick storage you already have.** Any static host works -- S3, a CDN,
+   GitHub Pages, even an ngrok tunnel for local testing. You're not
+   building a new service; you're pointing this plugin at a folder.
+2. **Call `catalog/publish` -- but against your own adapter, not a
+   central Cataloging Service.** The request body (your catalog JSON) is
+   unchanged, but the endpoint you hit is now this DS-internal,
+   same-operator trigger on your own node instead of a network call to
+   someone else's service, and there's no ACK/NACK to parse in response:
+   a synchronous call returns the catalog files and index, ready to
+   upload. No MERGE/FULL mode to pick either -- the plugin looks at what
+   you last published and figures out on its own whether this is a fresh
+   baseline or an incremental change; a resubmission of identical content
+   is simply a no-op.
+3. **Set one field on your existing DeDi Subscriber record:
+   `meta.catalog_index_urls`** (a list of `{url}` entries, not a single
+   string) -- that's the entire "registration" step. No separate
+   pointer file, no new registry to onboard into. The plugin
+   can even check this for you after every publish and warn you if it's
+   missing (see the [beckn-onix catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the "Optional registry catalog-index link check").
+
+Everything else -- subscriptions, restricted-catalog auth, a central
+Cataloging Service, waiting on callbacks -- simply isn't part of this
+model anymore, so there's nothing to configure for it, only things to
+delete from your existing integration (see "What you no longer need,"
+below).
+
+#### What you no longer need
+
+- **A `catalog/publish` call to a shared, network-facing Cataloging
+  Service, with an ACK/NACK response.** You still call `catalog/publish`
+  -- but it's now a DS-internal, same-operator trigger on your own
+  adapter, not a network call to someone else's service, and it responds
+  synchronously with your catalog files and index instead of an ACK/NACK
+  envelope.
+- **`catalog/subscription` CRUD.** A crawler's scope is its own
+  configuration now -- you don't manage subscriber lists.
+- **`catalog/search`.** Removed from the publish/pull surface; a
+  Discovery Service may still offer search over its own store, but
+  that's not something you interact with as a publisher.
+- **`catalog/push`/`/on_pull` callbacks.** Consolidated into the crawler
+  pulling from you and pushing into the Discovery Service's own `/push`
+  -- you never receive a callback for this.
+- **Restricted catalogs, download gates, `authMethods`.** Catalogs are
+  public, unconditionally, in this design. If you relied on
+  `publishDirectives.visibleTo` as an access gate, note that its
+  replacement (`networkIds` in the index) is a **relevance filter only**,
+  never an access control -- anyone with a file's URL can fetch it.
+
+#### Field-by-field mapping
+
+| Old (CATALG / DISCOVR) | New |
+| :---- | :---- |
+| `catalog/publish` with ACK/NACK | Files saved to storage; validation happens up front, results in a feedback log |
+| `publishDirectives.visibleTo` | Per-catalog `networkIds` in the index -- relevance filter, not access gate |
+| `publishDirectives.updateMode: MERGE` | A change file (id-keyed upserts/removals) |
+| `publishDirectives.updateMode: FULL` | A fresh baseline |
+| `catalog/pull`, mode FULL | The baseline file |
+| `catalog/pull`, mode DELTA | Change files after the crawler's cursor |
+| `downloadManifest` (sha256, sizeBytes) | `digest`/`size` in the index, verified against each self-signed file |
+| Subscription filters (`networkIds`, `schemaTypes`) | Crawler-side filtering on the index |
+| Subscription CRUD (`catalog/subscription`) | Not needed -- a crawler's scope is its own config |
+| `catalog/search` | Removed from this surface |
+| `catalog/push` | Crawler pull, with an optional change signal as an accelerator |
+| `/on_pull` callback | Consolidated into the Discovery Service's internal `/push` |
+| `subscriberId` | `nodeId`, a domain |
+| Restricted catalogs / download gate / `authMethods` | **Removed.** Catalogs are public-only; no per-catalog auth exists |
+| Offer-only catalogs, query-time attachment | Unchanged -- still lives behind `/discover` |
+
+#### What stays exactly the same
+
+- Your `Catalog`/`Resource`/`Offer` JSON content and its schema.
+- `catalogType: MASTER`/`REGULAR` and `resourceDirectives[].extends` --
+  unchanged, just resolved by the Discovery Service at index time instead
+  of centrally at publish time.
+- Offer-only catalogs and query-time attachment behind `/discover`.
+
 ---
 
 ## Configuration Reference
