@@ -322,11 +322,15 @@ After each step, check the `onix-bap` and `onix-bpp` logs to see the message bei
 
 ## Catalog Publishing (`catalog/publish`)
 
-`onix-bpp` exposes `/catalog/publish` — a DS-internal trigger that publishes one or more plain Beckn Catalog objects: it diffs each against what was last published (producing a fresh baseline, an incremental change file, or a no-op), signs the result, and writes a manifest + catalog index under the handler's `outputRoot` (`/beckn` in the container, `generic-devkit/data/beckn` on the host — see "Where the files get written" below). This is an unsigned, same-operator call, **not** the full signed, async `catalog/publish` Beckn action beckn.yaml describes (context/action envelope, routing, `on_publish` callback) — that is a materially larger scope this devkit does not implement yet. See [beckn-onix's catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the full design background.
+`onix-bpp` exposes `/catalog/publish` — a DS-internal trigger that publishes one or more plain Beckn Catalog objects: it diffs each against what was last published (producing a fresh baseline, an incremental change file, or a no-op), signs the result, and writes a manifest + catalog index under the handler's `outputRoot` (`/beckn` in the container, `generic-devkit/data/beckn` on the host — see "Where the files get written" below). This is an unsigned, same-operator call — see [beckn-onix's catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the full design background.
 
-### Prerequisite for your published catalogs to be discoverable
+### Prerequisites for your published catalogs to be discoverable
 
-> **TBD.** Running `catalog/publish` writes files locally, but a crawler only picks them up once your node is a member of a networkId with a live DeDi registry entry pointing `meta.catalog_index_urls` at your published index. This is not needed to use `discover` itself (it already serves catalogs already indexed from other sources) — it only matters if you want catalogs you publish here to show up in `discover` results. The DeDi registration steps are not documented yet.
+Neither of these is needed to use `discover` itself — it already serves catalogs already indexed from other sources. They only matter if you want catalogs you publish here to show up in `discover` results:
+
+1. **Publicly available storage for the catalog files.** `catalog/publish` writes files to `outputRoot` on disk (see "Where the files get written" below), but a crawler can only fetch them from a public URL — your own domain, a CDN, GitHub (e.g. GitHub Pages/raw), or a tunnel such as ngrok for local testing. `catalogBaseURL` in `generic-bpp.yaml` must point at wherever `outputRoot` is actually being served from.
+2. **A live DeDi registry entry for your node, with `meta.catalog_index_urls` set.** Your node needs to be a member of a networkId with a registry record pointing at the published index URL above — a crawler only picks up your catalog once this is set.
+   > TBD — the DeDi registration steps for this are not documented yet.
 
 ### Trigger it
 
@@ -348,7 +352,7 @@ curl -X POST http://localhost:8082/catalog/publish \
   }'
 ```
 
-Request body matches beckn.yaml's real `CatalogPublishAction` envelope shape (`context`/`message.catalogs[]`/`message.publishDirectives[]`) — `context` only carries `action` since every other `Context` field is optional and none are meaningful for this unsigned, same-operator call. `publishDirectives[]` entries are matched to a catalog by `catalogId`; `catalogType` (`MASTER`/`REGULAR`) is required by the spec, and `visibleTo` restricts which networks may fetch that catalog (empty/omitted means public) — both map straight onto the same-named fields in the published catalog index. Each catalog's own top-level `"id"` is used verbatim as its catalogId — it is not derived from a domain, so submit the full id you want published. `retire` (a list of catalogIds) and `forceBaseline` (bypass diffing, publish a fresh baseline) are this handler's own additions with no beckn.yaml equivalent — accepted as siblings of `context`/`message`, alongside or instead of `message.catalogs`.
+The request body has an envelope shape of `context`/`message.catalogs[]`/`message.publishDirectives[]` — `context` only carries `action` since every other `Context` field is optional and none are meaningful for this unsigned, same-operator call. `publishDirectives[]` entries are matched to a catalog by `catalogId`; `catalogType` (`MASTER`/`REGULAR`) is required, and `visibleTo` restricts which networks may fetch that catalog (empty/omitted means public) — both map straight onto the same-named fields in the published catalog index. Each catalog's own top-level `"id"` is used verbatim as its catalogId — it is not derived from a domain, so submit the full id you want published. `retire` (a list of catalogIds) and `forceBaseline` (bypass diffing, publish a fresh baseline) are this handler's own additions — accepted as siblings of `context`/`message`, alongside or instead of `message.catalogs`.
 
 ### Sample response
 
@@ -361,7 +365,7 @@ Request body matches beckn.yaml's real `CatalogPublishAction` envelope shape (`c
 }
 ```
 
-`status` is always present (`COMPLETED`/`FAILED` for the call as a whole); each entry in `results` borrows beckn.yaml's `CatalogProcessingResult` vocabulary (`ACCEPTED`/`REJECTED`) per catalog — a bad submission (e.g. missing `id`) is `REJECTED` with a `reason`, without failing the rest of the batch:
+`status` is always present (`COMPLETED`/`FAILED` for the call as a whole); each entry in `results` reports `ACCEPTED`/`REJECTED` per catalog — a bad submission (e.g. missing `id`) is `REJECTED` with a `reason`, without failing the rest of the batch:
 
 ```json
 {
