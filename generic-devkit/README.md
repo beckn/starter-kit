@@ -28,10 +28,8 @@ select → on_select → init → on_init → confirm → on_confirm
 ### 1. Clone and navigate
 
 ```bash
-git clone https://github.com/beckn/beckn-onix.git
-cd beckn-onix
-git checkout testnet
-cd testnet/generic-devkit/install
+git clone https://github.com/beckn/starter-kit.git
+cd starter-kit/generic-devkit/install
 ```
 
 ### 2. Start containers
@@ -41,10 +39,11 @@ docker compose -f docker-compose-generic.yml up -d
 docker ps
 ```
 
-You should see five containers running:
+You should see six containers running:
 
 | Container | Port | Role |
 |---|---|---|
+| `beckn-router` | 9000 | Caddy reverse proxy — single entry point, routes `/bap/*` → `onix-bap`, `/bpp/*` → `onix-bpp` |
 | `redis` | 6379 | Shared cache |
 | `onix-bap` | 8081 | BAP adapter (caller + receiver) |
 | `onix-bpp` | 8082 | BPP adapter (caller + receiver) |
@@ -56,13 +55,13 @@ You should see five containers running:
 Open Postman → **Import** → select the entire folder:
 
 ```
-testnet/generic-devkit/postman/
+generic-devkit/postman/
 ```
 
 This imports two collections:
 
-- **BAP — Beckn Protocol v2.0.0 Generic** — 11 outbound requests sent by the BAP
-- **BPP — Beckn Protocol v2.0.0 Generic** — 11 inbound callbacks sent by the BPP
+- **BAP Beckn Starter Kit** — 11 outbound requests sent by the BAP
+- **BPP Beckn Starter Kit** — 11 inbound callbacks sent by the BPP
 
 ### 4. Run the flow
 
