@@ -21,8 +21,6 @@ Postman collections.
 1. [Docker Desktop](https://www.docker.com/products/docker-desktop) — installed and running
 2. [Git](https://git-scm.com/downloads) — on your system path
 3. [Postman](https://www.postman.com/downloads/) — for sending API calls
-4. **A live DeDi registry entry for your BPP node, with `meta.catalog_index_urls` set.** `discover` in this devkit is served by whatever a crawler has actually pulled — nothing is crawled until your node's registry record carries a published catalog index (see "Migrating from the old catalog/publish API" below for the field itself). Without this, `catalog/publish` will run and produce files, but `discover` will return nothing.
-   > TODO: link the registry-entry/DeDi-registration walkthrough here once available.
 
 ---
 
@@ -91,13 +89,17 @@ docker logs -f sandbox-bap
 Use the **BPP collection** for two things outside the automatic BAP-driven flow above:
 
 - **`1 — Transaction`** — simulate BPP-initiated callbacks directly (`on_select`, `on_init`, `on_confirm`), e.g. to test an unsolicited/out-of-band callback rather than one triggered by the matching BAP request.
-- **`2 — Catalog Publishing`** — trigger `catalog/publish` (see [Catalog Publisher](#catalog-publisher-catalogpublish) below). This is new: publishing is a prerequisite for `discover` to return anything at all, since `discover` is served from whatever a crawler has pulled from your published catalog index.
+- **`2 — Catalog Publishing`** — trigger `catalog/publish` (see [Catalog Publisher](#catalog-publisher-catalogpublish) below). This is new: if you are publishing catalogs, use this flow. Publishing is not a prerequisite for `discover` to work -- `discover` already serves catalogs a crawler has indexed from other sources, whether or not you've published anything yourself.
 
 ---
 
 ## Catalog Publisher (`catalog/publish`)
 
 `onix-bpp` exposes `/catalog/publish` — a DS-internal trigger that publishes one or more plain Beckn Catalog objects: it diffs each against what was last published (producing a fresh baseline, an incremental change file, or a no-op), signs the result, and writes a manifest + catalog index under the handler's `outputRoot` (`/beckn` in the container, `generic-devkit/data/beckn` on the host — see `docker-compose-generic-local.yml`). This is an unsigned, same-operator call, **not** the full signed, async `catalog/publish` Beckn action beckn.yaml describes (context/action envelope, routing, `on_publish` callback) — that is a materially larger scope this devkit does not implement yet. See [beckn-onix's catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the full design background.
+
+### Prerequisite for your published catalogs to be discoverable
+
+> **TBD.** Running `catalog/publish` writes files locally, but a crawler only picks them up once your node is a member of a networkId with a live DeDi registry entry pointing `meta.catalog_index_urls` at your published index. This is not needed to use `discover` itself (it already serves catalogs already indexed from other sources) — it only matters if you want catalogs you publish here to show up in `discover` results. The DeDi registration steps are not documented yet.
 
 ### Trigger it
 
