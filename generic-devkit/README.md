@@ -89,11 +89,11 @@ docker logs -f sandbox-bap
 Use the **BPP collection** for two things outside the automatic BAP-driven flow above:
 
 - **`1 — Transaction`** — simulate BPP-initiated callbacks directly (`on_select`, `on_init`, `on_confirm`), e.g. to test an unsolicited/out-of-band callback rather than one triggered by the matching BAP request.
-- **`2 — Catalog Publishing`** — trigger `catalog/publish` (see [Catalog Publisher](#catalog-publisher-catalogpublish) below). This is new: if you are publishing catalogs, use this flow. Publishing is not a prerequisite for `discover` to work -- `discover` already serves catalogs a crawler has indexed from other sources, whether or not you've published anything yourself.
+- **`2 — Catalog Publishing`** — trigger `catalog/publish` (see [Catalog Publishing](#catalog-publishing-catalogpublish) below). This is new: if you are publishing catalogs, use this flow. Publishing is not a prerequisite for `discover` to work -- `discover` already serves catalogs a crawler has indexed from other sources, whether or not you've published anything yourself.
 
 ---
 
-## Catalog Publisher (`catalog/publish`)
+## Catalog Publishing (`catalog/publish`)
 
 `onix-bpp` exposes `/catalog/publish` — a DS-internal trigger that publishes one or more plain Beckn Catalog objects: it diffs each against what was last published (producing a fresh baseline, an incremental change file, or a no-op), signs the result, and writes a manifest + catalog index under the handler's `outputRoot` (`/beckn` in the container, `generic-devkit/data/beckn` on the host — see "Where the files get written" below). This is an unsigned, same-operator call, **not** the full signed, async `catalog/publish` Beckn action beckn.yaml describes (context/action envelope, routing, `on_publish` callback) — that is a materially larger scope this devkit does not implement yet. See [beckn-onix's catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the full design background.
 

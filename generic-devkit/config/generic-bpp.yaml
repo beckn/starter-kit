@@ -214,7 +214,7 @@ modules:
             # your ngrok domain changes.
             catalogBaseURL: "https://angular-absently-gab.ngrok-free.dev/beckn"
             # Read-only, warn-only: checks whether this node's DeDi registry
-            # record links this catalog index via meta.catalog_index_url.
+            # record links this catalog index via meta.catalog_index_urls.
             checkCatalogIndexLink: "true"
             # Both default to "true" already if omitted -- set explicitly
             # here for visibility. publishLatest: maintains a full,
