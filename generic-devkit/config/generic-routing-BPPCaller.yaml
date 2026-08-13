@@ -1,7 +1,11 @@
 # BPP Caller Routing — outbound on_* callbacks from BPP back to the originating BAP
 #
 # targetType "bap" resolves the BAP's callback URI via DeDi registry lookup (bapId).
-# catalog/on_publish is routed back to the BPP's own receiver (the Discover service sends this).
+#
+# catalog/publish does NOT route through here -- it's handled entirely by the
+# separate catalogPublish module (/catalog/publish in generic-bpp.yaml), an
+# unsigned, same-operator call with no routing config and no on_publish
+# callback at all.
 
 routingRules:
   # All standard on_* callbacks: routed to the BAP via registry lookup
@@ -19,12 +23,3 @@ routingRules:
       - on_cancel
       - on_rate
       - on_support
-
-  # Catalog on_publish: Discover service sends this back to the BPP that submitted the catalog
-  - domain: "beckn.one/testnet"
-    version: "2.0.0"
-    targetType: "url"
-    target:
-      url: "https://fabric.nfh.global/beckn/catalog"   # Beckn Catalog service endpoint
-    endpoints:
-      - publish

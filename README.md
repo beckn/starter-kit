@@ -733,7 +733,7 @@ Each ONIX adapter instance loads one primary config file, which in turn referenc
 
 **`generic-routing-BPPReceiver.yaml`** — all inbound action requests are routed to sandbox-bpp's webhook endpoint.
 
-**`generic-routing-BPPCaller.yaml`** — outbound routing for the BPP's `on_*` responses → `targetType: bap`, resolved dynamically via DeDi Registry lookup. (This file still has a leftover `publish` rule pointing at an old centralized catalog service — it's unused; `catalog/publish` is handled entirely by the separate `catalogPublish` module above, not through this routing file.)
+**`generic-routing-BPPCaller.yaml`** — outbound routing for the BPP's `on_*` responses → `targetType: bap`, resolved dynamically via DeDi Registry lookup. `catalog/publish` does not route through this file at all — it's handled entirely by the separate `catalogPublish` module above.
 
 Both config files embed a **`keyManager`** section with pre-generated Ed25519 key pairs for testnet participants `bap.example.com` and `bpp.example.com`. These are registered with the DeDi Registry on `beckn.one/testnet` and work out of the box — no changes needed to get started.
 
