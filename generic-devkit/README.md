@@ -1,17 +1,18 @@
 # Generic Devkit — Beckn Protocol v2.0.0
 
-Goal of this devkit is to enable any developer to run a **complete, usecase-agnostic Beckn v2.0.0 round-trip** on their local machine within a few minutes — no domain knowledge of EV charging, retail, or any other sector required.
+Goal of this devkit is to enable any developer to run a **usecase-agnostic Beckn v2.0.0 round-trip** on their local machine within a few minutes — no domain knowledge of EV charging, retail, or any other sector required.
 
-It covers all 11 Beckn protocol actions across the full transaction lifecycle:
+It currently covers the front half of the transaction lifecycle, plus catalog publishing:
 
 ```
 discover → on_discover
 select → on_select → init → on_init → confirm → on_confirm
-→ status / on_status  →  track / on_track
-→ update / on_update  →  cancel / on_cancel
-→ rate / on_rate  →  support / on_support
 (+ catalog/publish -- a DS-internal trigger, not part of the signed transaction flow above)
 ```
+
+`status`/`on_status`, `track`/`on_track`, `update`/`on_update`, `cancel`/`on_cancel`,
+`rate`/`on_rate`, and `support`/`on_support` are not yet implemented in this devkit's
+Postman collections.
 
 ---
 
@@ -20,6 +21,8 @@ select → on_select → init → on_init → confirm → on_confirm
 1. [Docker Desktop](https://www.docker.com/products/docker-desktop) — installed and running
 2. [Git](https://git-scm.com/downloads) — on your system path
 3. [Postman](https://www.postman.com/downloads/) — for sending API calls
+4. **A live DeDi registry entry for your BPP node, with `meta.catalog_index_urls` set.** `discover` in this devkit is served by whatever a crawler has actually pulled — nothing is crawled until your node's registry record carries a published catalog index (see "Migrating from the old catalog/publish API" below for the field itself). Without this, `catalog/publish` will run and produce files, but `discover` will return nothing.
+   > TODO: link the registry-entry/DeDi-registration walkthrough here once available.
 
 ---
 
@@ -60,8 +63,8 @@ generic-devkit/postman/
 
 This imports two collections:
 
-- **BAP Beckn Starter Kit** — 11 outbound requests sent by the BAP
-- **BPP Beckn Starter Kit** — 11 inbound callbacks sent by the BPP
+- **BAP Beckn Starter Kit** — 4 outbound requests sent by the BAP
+- **BPP Beckn Starter Kit** — 4 requests: 3 BPP-initiated callbacks + `catalog/publish`
 
 ### 4. Run the flow
 
@@ -73,12 +76,10 @@ Use the **BAP collection** to drive the transaction lifecycle in order:
 | 2 | `select` | Transaction |
 | 3 | `init` | Transaction |
 | 4 | `confirm` | Transaction |
-| 5 | `status` | Fulfillment |
-| 6 | `track` | Fulfillment |
-| 7 | `update` | Fulfillment |
-| 8 | `cancel` | Fulfillment |
-| 9 | `rate` | Post-Fulfillment |
-| 10 | `support` | Post-Fulfillment |
+
+`status`, `track`, `update`, `cancel`, `rate`, and `support` are not yet
+implemented in this devkit's collections (see the note at the top of this
+README).
 
 Each request returns an `ACK`. The corresponding `on_*` callback from the BPP arrives at `sandbox-bap` and can be viewed in the BAP logs:
 
@@ -87,7 +88,10 @@ docker logs -f onix-bap
 docker logs -f sandbox-bap
 ```
 
-Use the **BPP collection** to simulate BPP-initiated callbacks directly (e.g. unsolicited `on_status` push or `on_update`).
+Use the **BPP collection** for two things outside the automatic BAP-driven flow above:
+
+- **`1 — Transaction`** — simulate BPP-initiated callbacks directly (`on_select`, `on_init`, `on_confirm`), e.g. to test an unsolicited/out-of-band callback rather than one triggered by the matching BAP request.
+- **`2 — Catalog Publishing`** — trigger `catalog/publish` (see [Catalog Publisher](#catalog-publisher-catalogpublish) below). This is new: publishing is a prerequisite for `discover` to return anything at all, since `discover` is served from whatever a crawler has pulled from your published catalog index.
 
 ---
 
