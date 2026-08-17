@@ -44,8 +44,6 @@ modules:
         keyManager:
           id: simplekeymanager
           config:
-            # Testnet sandbox subscriber registered on beckn.one/testnet
-            # Replace with your own registered subscriber ID and keys for production
             subscriberId: bpp.example.com
             keyId: 76EU7ofwRCF1aobQkShARrf1PAUsNpHqWUJoynPu9w45YFKmzqaPmy
             signingPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
@@ -160,3 +158,84 @@ modules:
         - validateSchema
         - sign
         - validateAckSign
+
+  # ─────────────────────────────────────────────────────────────────
+  # catalog/publish — DS-internal trigger for the catalog-publisher
+  # plugin. Unsigned, same-operator call (not a network-facing Beckn
+  # action): no validateSign/addRoute/signAck. Given one or more plain
+  # Beckn Catalog objects, it diffs against what was last published
+  # (baseline vs. incremental change file), signs the result, and
+  # writes it under outputRoot. Public catalogs only in this phase.
+  # Listens at: http://localhost:8082/catalog/publish
+  # See beckn-onix's pkg/plugin/implementation/catalogpublisher/README.md
+  # ─────────────────────────────────────────────────────────────────
+  - name: catalogPublish
+    path: /catalog/publish
+    handler:
+      type: catalogPublish
+      role: bpp
+      outputRoot: /beckn
+      httpClientConfig:
+        maxIdleConns: 1000
+        maxIdleConnsPerHost: 200
+        idleConnTimeout: 300s
+        responseHeaderTimeout: 5s
+      plugins:
+        # registry+cache exist only to satisfy keyManager's constructor
+        # (KeyManagerProvider.New always requires a RegistryLookup); the
+        # publisher itself never calls either.
+        registry:
+          id: dediregistry
+          config:
+            timeout: 10
+            retry_max: 3
+            retry_wait_min: 100ms
+            retry_wait_max: 500ms
+        cache:
+          id: cache
+          config:
+            addr: redis:6379
+        keyManager:
+          id: simplekeymanager
+          config:
+            subscriberId: bpp.example.com
+            keyId: 76EU7ofwRCF1aobQkShARrf1PAUsNpHqWUJoynPu9w45YFKmzqaPmy
+            signingPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
+            signingPublicKey: CqVy97DW45bcZPPrWIYGe2ldl9C93NFeVciiAEYsvR0=
+            encrPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
+            encrPublicKey: CqVy97DW45bcZPPrWIYGe2ldl9C93NFeVciiAEYsvR0=
+        catalogPublisher:
+          id: catalogpublisher
+          config:
+            # subscriberId derives from keyManager.config.subscriberId above.
+            nextUpdateIn: "336h"
+            # Public URL prefix outputRoot is served under (beckn-router's
+            # ngrok tunnel, /beckn/* route in install/Caddyfile). Update if
+            # your ngrok domain changes.
+            catalogBaseURL: "https://<your-ngrok-domain>.ngrok-free.app/beckn"
+            # Read-only, warn-only: checks whether this node's DeDi registry
+            # record links this catalog index via meta.catalog_index_urls.
+            checkCatalogIndexLink: "true"
+            # Both default to "true" already if omitted -- set explicitly
+            # here for visibility. publishLatest: maintains a full,
+            # overwritten-in-place "latest" CatalogFile alongside
+            # baseline/changes[] (NFH-014). gzip: serves every catalog
+            # file gzip-compressed, signaled by a .json.gz URL extension
+            # (NFH-014 §10.1) -- digest/signature are always computed
+            # against the decompressed content either way.
+            publishLatest: "true"
+            gzip: "true"
+            # Automatic compaction (NFH-014 §10.1) is off by default (both
+            # 0) -- uncomment either to auto-compact a catalog's baseline
+            # instead of adding another change file, once it already has
+            # this many pending changes, or once their combined size
+            # reaches this fraction of the baseline's own size:
+            # compactionChangeCountThreshold: "20"
+            # compactionSizeRatioThreshold: "0.5"
+        # Validates submitted catalogs before they're published against
+        # catalog/publish's real schema (protocol-specifications-v2 beckn.yaml
+        # via becknConstants). checkPolicy left out -- not needed yet.
+        schemaValidator:
+          id: schemav2validator
+          config:
+            cacheTTL: "3600"

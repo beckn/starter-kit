@@ -5,13 +5,22 @@
 # beckn-router — single public entry point for both adapters
 # Port 9000 is mapped to the host; ngrok tunnels this one port.
 #
-# /bap/* → onix-bap:8081  (BAP receiver and caller)
-# /bpp/* → onix-bpp:8082  (BPP receiver and caller)
+# /bap/* → onix-bap:8081      (BAP receiver and caller)
+# /bpp/* → onix-bpp:8082      (BPP receiver and caller)
+# /beckn/* → static files under ../data/beckn (catalogPublish's
+#   outputRoot) -- the manifest/index/catalog files a crawler fetches.
+#   Mirrors outputRoot's own layout 1:1, so catalogBaseURL in
+#   generic-bpp.yaml is this tunnel's URL + "/beckn".
 :9000 {
     handle /bap/* {
         reverse_proxy onix-bap:8081
     }
     handle /bpp/* {
         reverse_proxy onix-bpp:8082
+    }
+    handle /beckn/* {
+        root * /srv/beckn
+        uri strip_prefix /beckn
+        file_server
     }
 }

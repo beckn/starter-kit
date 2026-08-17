@@ -1,5 +1,32 @@
 services:
   # ============================================================
+  # beckn-router — Caddy reverse proxy, single entry point for
+  #   both adapters. Exposes port 9000 on the host.
+  #
+  #   /bap/* → onix-bap:8081
+  #   /bpp/* → onix-bpp:8082
+  #
+  # For public-internet callbacks, tunnel port 9000 via ngrok:
+  #   cp ngrok.yml.example ngrok.yml   # fill in authtoken + domain
+  #   ngrok start --all --config ngrok.yml
+  # Then set PUBLIC_URL in your Postman collection to the tunnel URL.
+  # ============================================================
+  beckn-router:
+    image: caddy:alpine
+    container_name: beckn-router
+    ports:
+      - "9000:9000"
+    networks:
+      - beckn_network
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ../data/beckn:/srv/beckn:ro
+    depends_on:
+      - onix-bap
+      - onix-bpp
+    restart: unless-stopped
+    
+  # ============================================================
   # Redis — shared cache for both adapters
   # ============================================================
   redis:
@@ -42,6 +69,11 @@ services:
   # onix-bpp — Beckn adapter acting as BPP
   #   Caller  (outbound): http://localhost:8082/bpp/caller/
   #   Receiver (inbound): http://localhost:8082/bpp/receiver/
+  #   Catalog publish (internal trigger): http://localhost:8082/catalog/publish
+  #     -- writes manifest/index/catalog files under /beckn in the
+  #     container; ../data/beckn on the host, so they persist across
+  #     `docker compose down`/`up` and can be inspected or moved
+  #     elsewhere.
   # ============================================================
   onix-bpp:
     image: beckn-onix:latest
@@ -59,6 +91,7 @@ services:
       REDIS_ADDR: redis:6379
     volumes:
       - ../config:/app/config
+      - ../data/beckn:/beckn
     command: ["./server", "--config=/app/config/generic-bpp.yaml"]
 
   # ============================================================

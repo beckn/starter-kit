@@ -13,9 +13,10 @@ A hands-on starter kit for running a live beckn network in your own environment 
 - [Public-Internet Testing (ngrok)](#public-internet-testing-ngrok)
 - [Deployment: Cloud VPS](#deployment-cloud-vps)
 - [Your First Transaction](#your-first-transaction)
+- [Catalog Publishing (`catalog/publish`)](#catalog-publishing-catalogpublish)
 - [How It All Works](#how-it-all-works)
   - [The Services in This Stack](#the-services-in-this-stack)
-  - [Beckn Fabric: Registry and Catalog Service](#beckn-fabric-registry-and-catalog-service)
+  - [Beckn Fabric: Registry and Discovery](#beckn-fabric-registry-and-discovery)
   - [The Full Transaction Flow](#the-full-transaction-flow)
   - [Tracing a Request End-to-End](#tracing-a-request-end-to-end)
 - [Repository Structure](#repository-structure)
@@ -30,11 +31,11 @@ A hands-on starter kit for running a live beckn network in your own environment 
 
 By the end of this guide you will have:
 
-1. **A running beckn network** — a BAP (consumer-side platform), a BPP (provider-side platform), and the ONIX adapters that connect them, all running in your own environment, local or cloud. You will also see how the **Discovery Service** serves `discover` requests from BAPs.
+1. **A running beckn network** — a BAP (consumer-side platform), a BPP (provider-side platform), and the ONIX adapters that connect them, all running in your own environment, local or cloud. You will also see how a crawler-fed **Discovery Service** serves `discover` requests from BAPs.
 
-2. **A working understanding of Beckn Fabric services** — specifically how the **DeDi Registry** is used for identity and routing, and how the **Catalog Service** lets a BPP publish its offerings.
+2. **A working understanding of Beckn Fabric's DeDi Registry** — how it's used for participant identity, signature verification, and dynamic routing, and how a BPP makes its own catalog independently discoverable by publishing plain files and registering a catalog index URL.
 
-3. **An observable transaction flow** — you will fire real beckn API calls, see the messages get signed and routed, and watch the full `discover → select → init → confirm` lifecycle play out end-to-end.
+3. **An observable transaction flow** — you will fire real beckn API calls, see the messages get signed and routed, and watch the `discover → select → init → confirm` lifecycle play out end-to-end.
 
 ---
 
@@ -49,7 +50,7 @@ Every beckn network has two kinds of application participants:
 
 These two sides need not talk to each other directly. Every message travels through **ONIX adapters** — middleware that handles digital signing, schema validation, and protocol-level routing. It can also support observability at the network level, business policy enforcement, and much more. This keeps your application code focused on business logic.
 
-Underpinning the whole network are **Beckn Fabric** services — shared infrastructure that every participant relies on. This starter kit uses two Fabric services: the **DeDi Registry** (for identity and routing lookups) and the **Catalog Service** (for publishing offerings). These are covered in detail in [Beckn Fabric: Registry and Catalog Service](#beckn-fabric-registry-and-catalog-service).
+Underpinning the network is Beckn Fabric's **DeDi Registry** — shared, trustless infrastructure every participant relies on for identity and routing lookups. Discovery in this starter kit is served by a **crawler-fed Discovery Service**: a BPP publishes its catalog to storage it controls, points its DeDi registry entry at that catalog's index, and a crawler independently discovers and indexes it — no direct call between a publishing BPP and a central catalog service is involved. This is covered in detail in [Beckn Fabric: Registry and Discovery](#beckn-fabric-registry-and-discovery) and [Catalog Publishing](#catalog-publishing-catalogpublish).
 
 ---
 
@@ -63,7 +64,7 @@ Ensure the following tools are installed before you begin:
   - Docker Compose ships with Docker Desktop; for Linux see the [Compose plugin guide](https://docs.docker.com/compose/install/)
 - **Postman** — to send test requests
   - [Download Postman](https://www.postman.com/downloads/)
-- **ngrok** _(optional)_ — only needed if you want `discover` or `publish` callbacks to reach your laptop from external Beckn services
+- **ngrok** — a static domain is needed to run through the full flow, including making anything you publish actually crawlable (see [Public-Internet Testing (ngrok)](#public-internet-testing-ngrok))
   - [Download ngrok](https://ngrok.com/download) · requires a free ngrok account
 
 For cloud VPS deployment you additionally need SSH access to a Linux server (Ubuntu 22.04 recommended) with ports 8081, 8082, and 9000 open in your firewall.
@@ -72,7 +73,7 @@ For cloud VPS deployment you additionally need SSH access to a Linux server (Ubu
 
 ## Quick Start: Run the Network Locally
 
-This is the fastest way to see a beckn network in action. Five Docker containers — two adapters, two application simulators, and Redis — start up on your laptop and form a complete, working network.
+This is the fastest way to see a beckn network in action. Six Docker containers — two adapters, two application simulators, Redis, and a reverse proxy — start up on your laptop and form a complete, working network.
 
 **Step 1 — Clone the repository**
 
@@ -97,14 +98,14 @@ docker compose -f docker-compose-generic.yml ps
 
 Wait until all containers show `running` or `healthy`:
 
-| Service | Port | Status to expect |
-|---------|------|-----------------|
-| `redis` | 6379 | `healthy` |
-| `onix-bap` | 8081 | `running` |
-| `onix-bpp` | 8082 | `running` |
-| `app-bap` | 3001 | `healthy` |
-| `app-bpp` | 3002 | `healthy` |
-| `beckn-router` | 9000 | `running` |
+| Container | Port | Role |
+|---|---|---|
+| `beckn-router` | 9000 | Caddy reverse proxy — single entry point, routes `/bap/*` → `onix-bap`, `/bpp/*` → `onix-bpp` |
+| `redis` | 6379 | Shared cache for both adapters |
+| `onix-bap` | 8081 | BAP-side ONIX adapter (caller + receiver) |
+| `onix-bpp` | 8082 | BPP-side ONIX adapter (caller + receiver + `catalog/publish`) |
+| `sandbox-bap` | 3001 | Mock BAP application (receives callbacks) |
+| `sandbox-bpp` | 3002 | Mock BPP application (processes requests) |
 
 **Step 4 — (Optional) Watch the adapters in real time**
 
@@ -126,7 +127,7 @@ docker compose -f docker-compose-generic.yml down
 
 ## Public-Internet Testing (ngrok)
 
-When you send a `discover` request, the Discovery Service sends `on_discover` back to whatever URL is in `context.bapUri`. When a BPP sends `publish`, the Catalog Service sends `on_publish` back to `context.bppUri`. Both of these callback URLs must be reachable from the public internet — which your laptop is not, by default.
+When you send a `discover` request, the Discovery Service sends `on_discover` back to whatever URL is in `context.bapUri`. Both `bapUri`/`bppUri` callback URLs must be reachable from the public internet — which your laptop is not, by default. Publishing also depends on the tunnel: the catalog index and catalog files `catalog/publish` writes are only crawlable if they're served from a publicly reachable URL (see [Catalog Publishing](#catalog-publishing-catalogpublish)).
 
 The stack includes **beckn-router**, a Caddy reverse proxy on port 9000 that sits in front of both adapters:
 
@@ -138,11 +139,12 @@ https://<your-static-domain>.ngrok-free.app
 ngrok → localhost:9000
     │
 beckn-router (Caddy)
-    ├── /bap/receiver  →  onix-bap:8081
-    └── /bpp/receiver  →  onix-bpp:8082
+    ├── /bap/*     →  onix-bap:8081
+    ├── /bpp/*     →  onix-bpp:8082
+    └── /beckn/*   →  published catalog files (read-only, from ../data/beckn)
 ```
 
-Tunnelling one port gives you a single stable public URL for both adapters. The `bapUri` and `bppUri` fields in your Postman requests are built from a single `public_url` collection variable, so there is only one value to change.
+Tunnelling one port gives you a single stable public URL for the adapters and your published catalog. The `bapUri`/`bppUri` fields in your Postman requests are built from a single `public_url` collection variable, so there is only one value to change there — but note `catalogBaseURL` in `generic-bpp.yaml` is a **separate** setting that must be kept in sync with the same domain (see [Catalog Publishing](#catalog-publishing-catalogpublish)).
 
 ### One-time setup
 
@@ -176,7 +178,11 @@ In both Postman collections, set the `public_url` collection variable to your st
 public_url  →  https://<your-static-domain>.ngrok-free.app
 ```
 
-`bapUri` and `bppUri` in every request are derived from this single variable — nothing else to change.
+`bapUri` and `bppUri` in every request are derived from this single variable — nothing else to change there.
+
+**Step 3 — Update `catalogBaseURL` if you plan to publish**
+
+If you're using [Catalog Publishing](#catalog-publishing-catalogpublish), also update `catalogBaseURL` in `generic-devkit/config/generic-bpp.yaml` to the same domain — this is what gets stamped into the URLs a crawler will try to fetch, and it is not derived from the Postman variable above.
 
 ### Running with the tunnel
 
@@ -190,7 +196,7 @@ docker compose -f docker-compose-generic.yml up
 ngrok start --all --config ngrok.yml
 ```
 
-Watch the tunnel at `http://localhost:4040`. Each `discover` or `publish` flow will show three hops: your Postman request → adapter → external service → callback arriving back through the tunnel.
+Watch the tunnel at `http://localhost:4040`. Each `discover` flow will show the hops: your Postman request → adapter → external Discovery Service → callback arriving back through the tunnel.
 
 **Stopping**
 
@@ -206,7 +212,7 @@ pkill -f 'ngrok start'
 
 ### Local-only testing (no ngrok needed)
 
-For the direct BAP↔BPP transaction flow (`select`, `init`, `confirm`, `on_select`, `on_init`, `on_confirm`), callbacks are routed internally via the DeDi Registry — no public internet required. Leave `public_url` at its default (`http://beckn-router:9000`) and skip ngrok entirely.
+For the direct BAP↔BPP transaction flow (`select`, `init`, `confirm`, `on_select`, `on_init`, `on_confirm`), callbacks are routed internally via the DeDi Registry — no public internet required. Leave `public_url` at its default and skip ngrok entirely. `discover` and `catalog/publish` (if you want your own catalog to be crawlable) both need the tunnel, since both depend on being reachable from outside your machine.
 
 ---
 
@@ -223,8 +229,9 @@ The same Docker Compose file works on any Linux VPS. Follow these steps after pr
 | 22 | SSH |
 | 8081 | onix-bap (BAP ONIX adapter) |
 | 8082 | onix-bpp (BPP ONIX adapter) |
-| 3001 | app-bap (optional — for direct application access) |
-| 3002 | app-bpp (optional) |
+| 9000 | beckn-router (reverse proxy) |
+| 3001 | sandbox-bap (optional — for direct application access) |
+| 3002 | sandbox-bpp (optional) |
 
 **Install Docker on the server:**
 
@@ -253,7 +260,7 @@ docker compose -f docker-compose-generic.yml logs --tail=50
 
 **Make the stack survive reboots:**
 
-The `onix-bap` and `onix-bpp` containers already have `restart: unless-stopped` in the compose file. Redis and the application containers will also restart automatically once you add that policy. Run `up -d` again after any changes to the compose file.
+The `onix-bap` and `onix-bpp` containers already have `restart: unless-stopped` in the compose file, as do the other services. Run `up -d` again after any changes to the compose file.
 
 **Using a domain name and TLS:**
 
@@ -269,21 +276,21 @@ bpp.yourdomain.com {
 }
 ```
 
-Once your domain is live, update the routing configs (`generic-routing-BAPReceiver.yaml` and `generic-routing-BPPCaller.yaml`) with the public URLs, and register your participant with the Beckn testnet registry (see [Customising the Starter Kit](#customising-the-starter-kit)).
+Once your domain is live, update the routing configs (`generic-routing-BAPCaller.yaml`, `generic-routing-BAPReceiver.yaml`, `generic-routing-BPPCaller.yaml`, `generic-routing-BPPReceiver.yaml`) with the public URLs, and see [Customising the Starter Kit](#customising-the-starter-kit) for registering your own participant identity with the DeDi Registry.
 
 ---
 
 ## Your First Transaction
 
-With the stack running, import the Postman collections and walk through a complete beckn transaction.
+With the stack running, import the Postman collections and walk through a beckn transaction.
 
 **Import the collections**
 
 1. Open Postman and click **Import**.
 2. Navigate to `starter-kit/generic-devkit/postman/`.
 3. Import both files:
-   - `BAPBecknStarterKit.postman_collection.json` — the buyer side
-   - `BPPBecknStarterKit.postman_collection.json` — the provider side
+   - `BAPBecknStarterKit.postman_collection.json` — the buyer side, 4 requests: `discover`, `select`, `init`, `confirm`
+   - `BPPBecknStarterKit.postman_collection.json` — the provider side, 4 requests: `on_select`, `on_init`, `on_confirm`, and `publish`
 
 **Set the collection variables**
 
@@ -294,21 +301,211 @@ Each collection has a `bap_adapter_url` / `bpp_adapter_url` variable that tells 
 
 For a VPS, replace `localhost` with your server's IP or domain.
 
-**Run in this order**
+**Run the transaction flow**
 
-The two collections together cover everything a BAP and a BPP need to do. Run them in this sequence:
+Use the **BAP collection**, in order:
 
 ```
-[BPP] publish         ← BPP registers its catalog with the Catalog Service
-[BAP] discover        ← BAP queries the Discovery Service for available offerings
-[BAP] select          ← BAP selects a specific offering
-[BAP] init            ← BAP initiates the order
-[BAP] confirm         ← BAP confirms the transaction
+discover  →  select  →  init  →  confirm
 ```
 
-The `on_*` callbacks (`on_discover`, `on_select`, `on_init`, `on_confirm`) are sent asynchronously by the network and received automatically by the applications — you do not need to trigger them manually. The BPP collection also contains `on_select`, `on_init`, and `on_confirm` requests if you want to simulate or inspect the BPP responses manually.
+`status`, `track`, `update`, `cancel`, `rate`, and `support` are not yet implemented in these collections. `discover` does **not** require you to have published anything — it's served from whatever a crawler has already indexed across the network, independent of your own publishing activity.
+
+The `on_*` callbacks (`on_discover`, `on_select`, `on_init`, `on_confirm`) are sent asynchronously and received automatically by the sandbox applications — you do not need to trigger them manually. Use the **BPP collection** for two things outside this automatic flow:
+
+- `on_select`/`on_init`/`on_confirm` — simulate a BPP-initiated callback directly (e.g. an unsolicited one), rather than one triggered by the matching BAP request.
+- `publish` — see [Catalog Publishing](#catalog-publishing-catalogpublish) below, if you want your own catalog to become discoverable.
 
 After each step, check the `onix-bap` and `onix-bpp` logs to see the message being processed.
+
+---
+
+## Catalog Publishing (`catalog/publish`)
+
+`onix-bpp` exposes `/catalog/publish` — a DS-internal trigger that publishes one or more plain Beckn Catalog objects: it diffs each against what was last published (producing a fresh baseline, an incremental change file, or a no-op), signs the result, and writes a manifest + catalog index under the handler's `outputRoot` (`/beckn` in the container, `generic-devkit/data/beckn` on the host — see "Where the files get written" below). This is an unsigned, same-operator call — see [beckn-onix's catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the full design background.
+
+### Prerequisites for your published catalogs to be discoverable
+
+Neither of these is needed to use `discover` itself — it already serves catalogs already indexed from other sources. They only matter if you want catalogs you publish here to show up in `discover` results:
+
+1. **Publicly available storage for the catalog files.** `catalog/publish` writes files to `outputRoot` on disk (see "Where the files get written" below), but a crawler can only fetch them from a public URL — your own domain, a CDN, GitHub (e.g. GitHub Pages/raw), or a tunnel such as ngrok for local testing. `catalogBaseURL` in `generic-bpp.yaml` must point at wherever `outputRoot` is actually being served from.
+2. **A live DeDi registry entry for your node, with `meta.catalog_index_urls` set.** Your node needs to be a member of a networkId with a registry record pointing at the published index URL above — a crawler only picks up your catalog once this is set.
+   > TBD — the DeDi registration steps for this are not documented yet.
+
+### Trigger it
+
+Use the **`publish`** request under the BPP collection's **`2 — Catalog Publishing`** folder, or call it directly:
+
+```bash
+curl -X POST http://localhost:8082/catalog/publish \
+  -H "Content-Type: application/json" \
+  -d '{
+    "context": { "action": "catalog/publish" },
+    "message": {
+      "catalogs": [
+        { "id": "bpp.example.com/CAT-GENERIC-001", "descriptor": { "name": "Generic Catalog" }, "provider": { "id": "PROV-EXAMPLE-01" }, "resources": [ /* ... */ ] }
+      ],
+      "publishDirectives": [
+        { "catalogId": "bpp.example.com/CAT-GENERIC-001", "visibleTo": ["beckn.one/testnet", "nfh.global/testnet"], "catalogType": "REGULAR" }
+      ]
+    }
+  }'
+```
+
+The request body has an envelope shape of `context`/`message.catalogs[]`/`message.publishDirectives[]` — `context` only carries `action` since every other `Context` field is optional and none are meaningful for this unsigned, same-operator call. `publishDirectives[]` entries are matched to a catalog by `catalogId`; `catalogType` (`MASTER`/`REGULAR`) is required, and `visibleTo` restricts which networks may fetch that catalog (empty/omitted means public) — both map straight onto the same-named fields in the published catalog index. Each catalog's own top-level `"id"` is used verbatim as its catalogId — it is not derived from a domain, so submit the full id you want published. `retire` (a list of catalogIds) and `forceBaseline` (bypass diffing, publish a fresh baseline) are this handler's own additions — accepted as siblings of `context`/`message`, alongside or instead of `message.catalogs`.
+
+### Sample response
+
+```json
+{
+  "status": "COMPLETED",
+  "results": [
+    { "catalogId": "bpp.example.com/CAT-GENERIC-001", "status": "ACCEPTED", "version": 1 }
+  ]
+}
+```
+
+`status` is always present (`COMPLETED`/`FAILED` for the call as a whole); each entry in `results` reports `ACCEPTED`/`REJECTED` per catalog — a bad submission (e.g. missing `id`) is `REJECTED` with a `reason`, without failing the rest of the batch:
+
+```json
+{
+  "status": "COMPLETED",
+  "results": [
+    { "catalogId": "", "status": "REJECTED", "reason": "missing catalogId" }
+  ]
+}
+```
+
+A fatal failure (e.g. signing failure) returns `200` with `status: FAILED` and an `error` object instead. Publishing the same catalogId again with edited `resources`/`offers` produces an incremental change file and bumps its version instead of a fresh baseline; publishing it unchanged is a no-op. Inspect `generic-devkit/data/beckn/` on the host to see the generated manifest, catalog index, and versioned catalog files directly.
+
+### Where the files get written
+
+`catalogPublish`'s `outputRoot: /beckn` (set in `generic-bpp.yaml`) is bind-mounted to `generic-devkit/data/beckn/` on the host (`docker-compose-generic.yml`), so every published catalog lands there directly — no need to exec into the container to see it:
+
+```
+generic-devkit/data/beckn/
+  index/
+    becknCatalogs.index.json          # the catalog index -- one entry per catalogId, with baseline/changes/latest pointers
+  catalogs/
+    <localName>.v<version>.json.gz    # a baseline (e.g. CAT-GENERIC-001.v1.json.gz)
+    <localName>.latest.json.gz        # overwritten-in-place pointer at the current version (publishLatest, default true)
+    changes/
+      <localName>.v<version>.changes.json.gz   # an incremental change file (e.g. CAT-GENERIC-001.v2.changes.json.gz)
+```
+
+`<localName>` is the catalog's `catalogId` with any `domain/` prefix stripped. Files are `.gz` by default (`gzip: true` in `catalogPublisher`'s config) — `digest`/`size` in the index are always computed against the decompressed content regardless.
+
+The index's `baseline`/`changes[]`/`latest` entries carry full URLs, not local paths — each is `catalogBaseURL` (also set in `generic-bpp.yaml`, e.g. `https://your-tunnel.ngrok-free.dev/beckn`) plus the file's path under `outputRoot`. `catalogBaseURL` must match wherever `outputRoot` is actually being served from publicly (`beckn-router`'s Caddy `/beckn/*` route over your ngrok tunnel) — update it if your ngrok domain changes, or the URLs a crawler tries to fetch will 404.
+
+### Migrating from the old catalog/publish API to the decentralized catalog
+
+If you're publishing catalogs today via `catalog/publish` with ACK/NACK
+responses, subscription CRUD (`catalog/subscription`), or a central
+Cataloging Service, this section is for you. The model this plugin
+implements is a different shape entirely: you publish plain files to your
+own storage, and DeDi + a crawler do the rest. Nothing about your actual
+catalog *content* (the `Catalog`, `Resource`, `Offer` schemas) changes --
+what changes is how it gets from you to a Discovery Service.
+
+#### The conceptual shift
+
+**Before:** you called a network API (`catalog/publish`) and got an
+ACK/NACK back. A central Cataloging Service stored your catalog, handled
+subscriptions, and served `catalog/pull`/`catalog/search` to consumers.
+
+**Now:** you publish immutable JSON files to storage you already control
+(any CDN, object store, or static host) via this plugin's `Publish` call,
+exposed here as a DS-internal `catalog/publish` trigger with no ACK/NACK
+envelope at all -- see "Trigger it" above. Once your files are on your
+storage and your DeDi record's `meta.catalog_index_urls` (a list of
+`{url}` entries, per NFH-014 CON-TBD-33 -- a node may host more than one
+catalog index) points at your index, crawlers discover and pull your
+catalogs on their own schedule. There is no central service to call,
+subscribe to, or wait on.
+
+#### What you need to do
+
+Short version: **pick some storage, call `catalog/publish` against your
+own adapter instead of a central service, and set one field on a record
+you already have.** That's the whole migration -- there's no server to
+stand up, no subscription list to manage, and no ACK/NACK handshake to
+get right.
+
+1. **Pick storage you already have.** Any static host works -- S3, a CDN,
+   GitHub Pages, even an ngrok tunnel for local testing. You're not
+   building a new service; you're pointing this plugin at a folder.
+2. **Call `catalog/publish` -- but against your own adapter, not a
+   central Cataloging Service.** The request body (your catalog JSON) is
+   unchanged, but the endpoint you hit is now this DS-internal,
+   same-operator trigger on your own node instead of a network call to
+   someone else's service, and there's no ACK/NACK to parse in response:
+   a synchronous call returns the catalog files and index, ready to
+   upload. No MERGE/FULL mode to pick either -- the plugin looks at what
+   you last published and figures out on its own whether this is a fresh
+   baseline or an incremental change; a resubmission of identical content
+   is simply a no-op.
+3. **Set one field on your existing DeDi Subscriber record:
+   `meta.catalog_index_urls`** (a list of `{url}` entries, not a single
+   string) -- that's the entire "registration" step. No separate
+   pointer file, no new registry to onboard into. The plugin
+   can even check this for you after every publish and warn you if it's
+   missing (see the [beckn-onix catalogpublisher README](https://github.com/beckn/beckn-onix/blob/catalog-publisher/pkg/plugin/implementation/catalogpublisher/README.md) for the "Optional registry catalog-index link check").
+
+Everything else -- subscriptions, restricted-catalog auth, a central
+Cataloging Service, waiting on callbacks -- simply isn't part of this
+model anymore, so there's nothing to configure for it, only things to
+delete from your existing integration (see "What you no longer need,"
+below).
+
+#### What you no longer need
+
+- **A `catalog/publish` call to a shared, network-facing Cataloging
+  Service, with an ACK/NACK response.** You still call `catalog/publish`
+  -- but it's now a DS-internal, same-operator trigger on your own
+  adapter, not a network call to someone else's service, and it responds
+  synchronously with your catalog files and index instead of an ACK/NACK
+  envelope.
+- **`catalog/subscription` CRUD.** A crawler's scope is its own
+  configuration now -- you don't manage subscriber lists.
+- **`catalog/search`.** Removed from the publish/pull surface; a
+  Discovery Service may still offer search over its own store, but
+  that's not something you interact with as a publisher.
+- **`catalog/push`/`/on_pull` callbacks.** Consolidated into the crawler
+  pulling from you and pushing into the Discovery Service's own `/push`
+  -- you never receive a callback for this.
+- **Restricted catalogs, download gates, `authMethods`.** Catalogs are
+  public, unconditionally, in this design. If you relied on
+  `publishDirectives.visibleTo` as an access gate, note that its
+  replacement (`networkIds` in the index) is a **relevance filter only**,
+  never an access control -- anyone with a file's URL can fetch it.
+
+#### Field-by-field mapping
+
+| Old (CATALG / DISCOVR) | New |
+| :---- | :---- |
+| `catalog/publish` with ACK/NACK | Files saved to storage; validation happens up front, results in a feedback log |
+| `publishDirectives.visibleTo` | Per-catalog `networkIds` in the index -- relevance filter, not access gate |
+| `publishDirectives.updateMode: MERGE` | A change file (id-keyed upserts/removals) |
+| `publishDirectives.updateMode: FULL` | A fresh baseline |
+| `catalog/pull`, mode FULL | The baseline file |
+| `catalog/pull`, mode DELTA | Change files after the crawler's cursor |
+| `downloadManifest` (sha256, sizeBytes) | `digest`/`size` in the index, verified against each self-signed file |
+| Subscription filters (`networkIds`, `schemaTypes`) | Crawler-side filtering on the index |
+| Subscription CRUD (`catalog/subscription`) | Not needed -- a crawler's scope is its own config |
+| `catalog/search` | Removed from this surface |
+| `catalog/push` | Crawler pull, with an optional change signal as an accelerator |
+| `/on_pull` callback | Consolidated into the Discovery Service's internal `/push` |
+| `subscriberId` | `nodeId`, a domain |
+| Restricted catalogs / download gate / `authMethods` | **Removed.** Catalogs are public-only; no per-catalog auth exists |
+| Offer-only catalogs, query-time attachment | Unchanged -- still lives behind `/discover` |
+
+#### What stays exactly the same
+
+- Your `Catalog`/`Resource`/`Offer` JSON content and its schema.
+- `catalogType: MASTER`/`REGULAR` and `resourceDirectives[].extends` --
+  unchanged, just resolved by the Discovery Service at index time instead
+  of centrally at publish time.
+- Offer-only catalogs and query-time attachment behind `/discover`.
 
 ---
 
@@ -323,15 +520,18 @@ Now that you have seen the network in action, here is a deeper look at how the p
   │                      Your Environment                        │
   │                                                              │
   │  ┌──────────────┐     ┌────────────────────────────────────┐ │
-  │  │   app-bap    │◄───►│  onix-bap  (port 8081)             │ │
+  │  │  sandbox-bap │◄───►│  onix-bap  (port 8081)             │ │
   │  │  BAP app     │     │  BAP-side ONIX adapter             │ │
   │  └──────────────┘     │  /bap/caller/   /bap/receiver/     │ │
   │                       └──────────────────────┬─────────────┘ │
   │                                              │               │
   │  ┌──────────────┐     ┌────────────────────────────────────┐ │
-  │  │   app-bpp    │◄───►│  onix-bpp  (port 8082)             │ │
+  │  │  sandbox-bpp │◄───►│  onix-bpp  (port 8082)             │ │
   │  │  BPP app     │     │  BPP-side ONIX adapter             │ │
   │  └──────────────┘     │  /bpp/receiver/  /bpp/caller/      │ │
+  │                       │  /catalog/publish (writes to       │ │
+  │                       │   ../data/beckn, served publicly   │ │
+  │                       │   via beckn-router)                │ │
   │                       └──────────────────────┬─────────────┘ │
   │                                              │               │
   │  ┌──────────────────────────────────────┐    │               │
@@ -343,35 +543,39 @@ Now that you have seen the network in action, here is a deeper look at how the p
                            ▼                                       ▼
           ┌─────────────────────────────┐     ┌─────────────────────────────┐
           │        Beckn Fabric         │     │      Discovery Service      │
-          │                             │     │   (independent service)     │
-          │  DeDi Registry              │     │                             │
-          │  · Identity lookups         │     │  Receives discover from     │
-          │  · Dynamic routing          │     │  BAPs, queries Fabric       │
-          │    (resolves BAP/BPP URIs)  │     │  catalog, returns           │
+          │                             │     │   (independent service,     │
+          │  DeDi Registry              │     │    crawler-fed)             │
+          │  · Identity lookups         │     │                             │
+          │  · Dynamic routing          │     │  Receives discover from     │
+          │    (resolves BAP/BPP URIs)  │     │  BAPs, serves results from  │
+          │  · Holds each node's        │     │  whatever a crawler has     │
+          │    catalog_index_urls       │     │  already indexed, returns   │
           │                             │     │  on_discover                │
-          │  Catalog Service            │     └─────────────────────────────┘
-          │  · BPP publishes offerings  │
-          │  · Feeds Discovery Service  │
-          └─────────────────────────────┘
+          └─────────────────────────────┘     └─────────────────────────────┘
+                           ▲
+                           │ (independently, on its own schedule)
+                           │
+          A crawler reads catalog_index_urls from the DeDi Registry
+          and pulls each node's published catalog files directly --
+          no call from the publishing BPP to the Discovery Service.
 ```
 
 | Service | Image | Port | Role |
 |---------|-------|------|------|
+| `beckn-router` | `caddy:alpine` | 9000 | Reverse proxy — single entry point for both adapters and published catalog files |
 | `onix-bap` | `fidedocker/onix-adapter` | 8081 | BAP-side protocol adapter |
-| `onix-bpp` | `fidedocker/onix-adapter` | 8082 | BPP-side protocol adapter |
-| `app-bap` | `fidedocker/sandbox-2.0` | 3001 | Simulates a BAP application |
-| `app-bpp` | `fidedocker/sandbox-2.0` | 3002 | Simulates a BPP application |
+| `onix-bpp` | `fidedocker/catalog-publisher` | 8082 | BPP-side protocol adapter, includes the `catalogpublisher` plugin |
+| `sandbox-bap` | `fidedocker/sandbox-2.0` | 3001 | Simulates a BAP application |
+| `sandbox-bpp` | `fidedocker/sandbox-2.0` | 3002 | Simulates a BPP application |
 | `redis` | `redis:alpine` | 6379 | Shared request/response cache |
 
-**The ONIX adapter** (`fidedocker/onix-adapter`) is the core middleware from the [beckn-onix](https://github.com/beckn/beckn-onix) project. It is a plugin-based Go server that handles signing, signature validation, schema validation, and routing for every beckn message. Both `onix-bap` and `onix-bpp` run the same binary — their behaviour is entirely determined by their config files.
+**The ONIX adapter** (`fidedocker/onix-adapter` / `fidedocker/catalog-publisher`) is the core middleware from the [beckn-onix](https://github.com/beckn/beckn-onix) project. It is a plugin-based Go server that handles signing, signature validation, schema validation, and routing for every beckn message. Both `onix-bap` and `onix-bpp` run the same underlying binary — their behaviour is entirely determined by their config files and which plugins are compiled in.
 
 **The application simulator** (`fidedocker/sandbox-2.0`) is a generic beckn application simulator. It exposes simple HTTP endpoints that receive forwarded messages and generate appropriate responses, so you can observe the full protocol flow without building your own BAP or BPP app yet.
 
-### Beckn Fabric: Registry and Catalog Service
+### Beckn Fabric: Registry and Discovery
 
-**Beckn Fabric** is the shared infrastructure layer that makes an open beckn network possible. Without Fabric, each participant would need bilateral agreements with every other participant. Fabric removes that requirement by providing shared, trustless services that the whole network relies on.
-
-This starter kit uses two Beckn Fabric services, both hosted at `fabric.nfh.global`, plus an independent Discovery Service that runs alongside but outside of Fabric:
+**Beckn Fabric** is the shared infrastructure layer that makes an open beckn network possible. Without Fabric, each participant would need bilateral agreements with every other participant. Fabric removes that requirement by providing shared, trustless services that the whole network relies on. This starter kit uses one Beckn Fabric service — the **DeDi Registry** — plus an independent, crawler-fed Discovery Service that runs alongside but outside of Fabric.
 
 **DeDi Registry** (`fabric.nfh.global/registry/dedi`)
 
@@ -389,21 +593,11 @@ registry:
     registryName: subscribers.beckn.one
 ```
 
-**Catalog Service** (`fabric.nfh.global/beckn/catalog`)
+The same registry record is also where a BPP points crawlers at its own catalog — see `meta.catalog_index_urls` in [Catalog Publishing](#catalog-publishing-catalogpublish).
 
-The Catalog Service is where BPPs publish their offerings. When a BPP calls `publish` (via `onix-bpp`), the adapter signs the message and forwards it to the Catalog Service. The Catalog Service stores the offering and responds with an `on_publish` callback to the BPP. This is how a BPP makes its catalog available for discovery without needing a direct connection to any BAP.
+**Discovery Service** (crawler-fed)
 
-The Catalog Service endpoint is configured in `generic-routing-BPPCaller.yaml`:
-```yaml
-target:
-  url: "https://fabric.nfh.global/beckn/catalog"
-endpoints:
-  - publish
-```
-
-**Discovery Service** (`<discovery-service>`)
-
-The Discovery Service is an independent network service — not part of Beckn Fabric — that acts as the search engine for the network. It queries the catalogs that BPPs have published to the Fabric Catalog Service and serves matching results to BAPs. When a BAP sends a `discover` request, the adapter routes it to the Discovery Service, which responds asynchronously with an `on_discover` callback. The BAP never contacts a BPP directly during discovery — direct BAP-to-BPP communication only begins at `select`.
+The Discovery Service is an independent network service — not part of Beckn Fabric — that acts as the search engine for the network. It does **not** receive a direct call from a BPP's `publish`. Instead, a crawler reads `meta.catalog_index_urls` from each DeDi-registered node's record, independently fetches and verifies that node's published catalog files, and feeds the result into the Discovery Service's own index on its own schedule. When a BAP sends a `discover` request, the adapter routes it to the Discovery Service, which serves results from whatever the crawler has already indexed and responds asynchronously with `on_discover`. The BAP never contacts a BPP directly during discovery — direct BAP-to-BPP communication only begins at `select`.
 
 The Discovery Service endpoint is configured in `generic-routing-BAPCaller.yaml`:
 ```yaml
@@ -415,48 +609,57 @@ endpoints:
 
 ### The Full Transaction Flow
 
-Here is the complete picture of how a beckn transaction flows through the network, showing the correct roles of the two Beckn Fabric services and the Discovery Service:
+Here is the complete picture of how a beckn transaction flows through the network:
 
 ```
-BPP side — catalog setup (happens before any BAP transaction)
+BPP side — catalog publishing (independent of any BAP transaction, optional)
 ─────────────────────────────────────────────────────────────────
 
-app-bpp ──publish──► onix-bpp ──publish──► Catalog Service (Fabric)
-                                                    │
-app-bpp ◄──on_publish── onix-bpp ◄──on_publish─────┘
-(catalog accepted; BPP offerings are now discoverable)
+sandbox-bpp ──publish──► onix-bpp ──writes files──► ../data/beckn
+                                                          (served publicly via beckn-router)
+sandbox-bpp ◄──synchronous response── onix-bpp
+(no on_publish callback -- this is a same-operator, unsigned call)
+
+                                                          │
+                                          (independently, on its own schedule)
+                                                          ▼
+                                       A crawler reads this node's DeDi registry
+                                       entry, finds catalog_index_urls, and pulls
+                                       the published catalog files directly.
 
 
 BAP side — discovery
 ─────────────────────────────────────────────────────────────────
 
-app-bap ──discover──► onix-bap ──discover──► Discovery Service
+sandbox-bap ──discover──► onix-bap ──discover──► Discovery Service
                                                     │
-                                     (queries Fabric catalog)
+                                    (serves from whatever a crawler
+                                     has already indexed, from any
+                                     publishing node -- not only this one)
                                                     │
-app-bap ◄──on_discover── onix-bap ◄──on_discover───┘
+sandbox-bap ◄──on_discover── onix-bap ◄──on_discover───┘
 (BAP receives list of matching offerings)
 
 
 BAP ↔ BPP — transaction (select / init / confirm)
 ─────────────────────────────────────────────────────────────────
 
-app-bap ──select──► onix-bap
+sandbox-bap ──select──► onix-bap
                         │ DeDi Registry resolves BPP URI
                         ▼
-                    onix-bpp ──► app-bpp
+                    onix-bpp ──► sandbox-bpp
                         │
-                    app-bpp sends on_select response
+                    sandbox-bpp sends on_select response
                         │
                     onix-bpp
                         │ DeDi Registry resolves BAP URI
                         ▼
-app-bap ◄──on_select── onix-bap
+sandbox-bap ◄──on_select── onix-bap
 
      ... same pattern repeats for init / confirm ...
 ```
 
-The key insight: **discovery always goes through the Discovery Service** (BAP → Discovery Service), and **post-discovery transactions flow directly between BAP and BPP** with the DeDi Registry providing dynamic routing. The BPP also uses Fabric to publish its catalog before any discovery can happen.
+The key insight: **discovery is served from whatever a crawler has already indexed across the network**, independent of when or whether *this* BPP has published anything, and **post-discovery transactions flow directly between BAP and BPP** with the DeDi Registry providing dynamic routing. Publishing your own catalog (optional) makes it discoverable on the crawler's own schedule, asynchronously — it is never a prerequisite for `discover` to return results from other nodes.
 
 ### Tracing a Request End-to-End
 
@@ -473,13 +676,13 @@ You trigger a `discover` by POSTing to onix-bap's caller endpoint (`/bap/caller/
 
 **5. Request → Discovery Service** — the signed, validated `discover` message is forwarded to the Discovery Service.
 
-**6. Discovery Service → on_discover callback** — the Discovery Service searches its catalog index and asynchronously POSTs `on_discover` back to onix-bap's receiver endpoint (`/bap/receiver/on_discover`).
+**6. Discovery Service → on_discover callback** — the Discovery Service searches its crawler-built catalog index and asynchronously POSTs `on_discover` back to onix-bap's receiver endpoint (`/bap/receiver/on_discover`).
 
 **7. validateSign** — the `bapTxnReceiver` module verifies the Discovery Service's digital signature by looking up its public key in the DeDi Registry.
 
-**8. addRoute** — reads `generic-routing-BAPReceiver.yaml`, which routes all `on_*` callbacks to the app-bap webhook.
+**8. addRoute** — reads `generic-routing-BAPReceiver.yaml`, which routes all `on_*` callbacks to the sandbox-bap webhook.
 
-**9. app-bap receives on_discover** — the response (list of available offerings) is now stored in the application and visible in logs.
+**9. sandbox-bap receives on_discover** — the response (list of available offerings) is now stored in the application and visible in logs.
 
 For `select`, `init`, and `confirm`, the flow is similar but the adapter uses the DeDi Registry to resolve the BPP's URI dynamically (no hardcoded URL needed), and onix-bpp uses the registry to resolve the BAP's callback URI for the `on_*` responses.
 
@@ -494,14 +697,16 @@ starter-kit/
     │
     ├── config/                               # All adapter configuration
     │   ├── generic-bap.yaml                  # BAP adapter: modules, plugins, keys
-    │   ├── generic-bpp.yaml                  # BPP adapter: modules, plugins, keys
+    │   ├── generic-bpp.yaml                  # BPP adapter: modules, plugins, keys (incl. catalogPublish)
     │   ├── generic-routing-BAPCaller.yaml    # Where BAP sends outbound requests
     │   ├── generic-routing-BAPReceiver.yaml  # Where BAP delivers incoming callbacks
     │   ├── generic-routing-BPPCaller.yaml    # Where BPP sends outbound responses
     │   └── generic-routing-BPPReceiver.yaml  # Where BPP delivers incoming requests
     │
+    ├── data/beckn/                            # catalog/publish output (see Catalog Publishing)
+    │
     ├── install/
-    │   ├── docker-compose-generic.yml        # Main compose file (pre-built adapter image)
+    │   ├── docker-compose-generic.yml        # Main compose file (pre-built adapter images)
     │   └── docker-compose-generic-local.yml  # Alternate compose file (locally built image)
     │
     └── postman/
@@ -516,24 +721,23 @@ Each ONIX adapter instance loads one primary config file, which in turn referenc
 **`generic-bap.yaml`** — loaded by onix-bap. Defines two modules:
 
 - `bapTxnCaller` at `/bap/caller/` handles **outbound** BAP requests. It signs each message, routes it using `generic-routing-BAPCaller.yaml`, and validates the schema.
-- `bapTxnReceiver` at `/bap/receiver/` handles **inbound** `on_*` callbacks. It validates the sender's signature (via DeDi Registry lookup), routes the response to app-bap using `generic-routing-BAPReceiver.yaml`, and validates the schema.
+- `bapTxnReceiver` at `/bap/receiver/` handles **inbound** `on_*` callbacks. It validates the sender's signature (via DeDi Registry lookup), routes the response to sandbox-bap using `generic-routing-BAPReceiver.yaml`, and validates the schema.
 
-**`generic-bpp.yaml`** — loaded by onix-bpp. Defines two modules:
+**`generic-bpp.yaml`** — loaded by onix-bpp. Defines three modules:
 
-- `bppTxnReceiver` at `/bpp/receiver/` handles **inbound** action requests from BAPs. It validates signatures and routes to app-bpp using `generic-routing-BPPReceiver.yaml`.
-- `bppTxnCaller` at `/bpp/caller/` handles **outbound** `on_*` responses and `publish` calls. It signs messages and routes them using `generic-routing-BPPCaller.yaml`.
+- `bppTxnReceiver` at `/bpp/receiver/` handles **inbound** action requests from BAPs. It validates signatures and routes to sandbox-bpp using `generic-routing-BPPReceiver.yaml`.
+- `bppTxnCaller` at `/bpp/caller/` handles **outbound** `on_*` responses. It signs messages and routes them using `generic-routing-BPPCaller.yaml`.
+- `catalogPublish` at `/catalog/publish` — a separate module, **not** part of `bppTxnCaller` — handles `catalog/publish` directly: unsigned, same-operator, no routing config involved. See [Catalog Publishing](#catalog-publishing-catalogpublish).
 
 **`generic-routing-BAPCaller.yaml`** — outbound routing for the BAP:
-- `discover` → routes to the Discovery Service (`https://<discovery-service>/beckn`)
-- All transaction actions (`select`, `init`, `confirm`, `status`, `track`, `update`, `cancel`, `rate`, `support`) → `targetType: bpp`, resolved dynamically via DeDi Registry lookup
+- `discover` → routes to the Discovery Service
+- Transaction actions (`select`, `init`, `confirm`, plus not-yet-implemented `status`, `track`, `update`, `cancel`, `rate`, `support`) → `targetType: bpp`, resolved dynamically via DeDi Registry lookup
 
-**`generic-routing-BAPReceiver.yaml`** — all inbound `on_*` callbacks are routed to app-bap's webhook endpoint.
+**`generic-routing-BAPReceiver.yaml`** — all inbound `on_*` callbacks are routed to sandbox-bap's webhook endpoint.
 
-**`generic-routing-BPPReceiver.yaml`** — all inbound action requests and `on_publish` callbacks are routed to app-bpp's webhook endpoint.
+**`generic-routing-BPPReceiver.yaml`** — all inbound action requests are routed to sandbox-bpp's webhook endpoint.
 
-**`generic-routing-BPPCaller.yaml`** — outbound routing for the BPP:
-- All `on_*` responses (`on_select`, `on_init`, `on_confirm`, etc.) → `targetType: bap`, resolved dynamically via DeDi Registry lookup
-- `publish` → routes to the Fabric Catalog Service (`https://fabric.nfh.global/beckn/catalog`)
+**`generic-routing-BPPCaller.yaml`** — outbound routing for the BPP's `on_*` responses → `targetType: bap`, resolved dynamically via DeDi Registry lookup. `catalog/publish` does not route through this file at all — it's handled entirely by the separate `catalogPublish` module above.
 
 Both config files embed a **`keyManager`** section with pre-generated Ed25519 key pairs for testnet participants `bap.example.com` and `bpp.example.com`. These are registered with the DeDi Registry on `beckn.one/testnet` and work out of the box — no changes needed to get started.
 
@@ -546,16 +750,16 @@ Both config files embed a **`keyManager`** section with pre-generated Ed25519 ke
 
 **`BPPBecknStarterKit.postman_collection.json`** — the provider-side flows, organised in two folders:
 
-- **1 — Transaction:** `on_select`, `on_init`, `on_confirm` — sent to onix-bpp (`/bpp/caller/on_*`). Use these to manually simulate or inspect BPP responses. In a normal flow app-bpp handles these automatically.
-- **2 — Catalog Publishing:** `publish` — sent to onix-bpp (`/bpp/caller/publish`), which routes it to the Fabric Catalog Service. Run this before `discover` to populate the catalog.
+- **1 — Transaction:** `on_select`, `on_init`, `on_confirm` — sent to onix-bpp (`/bpp/caller/on_*`). Use these to manually simulate or inspect BPP responses. In a normal flow sandbox-bpp handles these automatically.
+- **2 — Catalog Publishing:** `publish` — sent to onix-bpp at `/catalog/publish` directly (**not** `/bpp/caller/publish` — this is the separate `catalogPublish` module, see [Catalog Publishing](#catalog-publishing-catalogpublish)).
 
 ---
 
 ## Customising the Starter Kit
 
-**Changing the Discovery Service or Catalog Service endpoint**
+**Changing the Discovery Service endpoint**
 
-Edit `config/generic-routing-BAPCaller.yaml` to point `discover` at a different Discovery Service. Edit `config/generic-routing-BPPCaller.yaml` to point `publish` at a different Catalog Service endpoint.
+Edit `config/generic-routing-BAPCaller.yaml` to point `discover` at a different Discovery Service.
 
 **Running fully offline (no external dependencies)**
 
@@ -569,10 +773,11 @@ The config files contain pre-generated testnet key pairs for `bap.example.com` a
 2. Register your `networkParticipant` domain and public key with the DeDi Registry at `fabric.nfh.global/registry/dedi`.
 3. Update the `keyManager` section in `generic-bap.yaml` and `generic-bpp.yaml` with your new participant ID, key ID, and key material.
 4. Update the routing config files to use your `networkId` in place of `beckn.one/testnet`.
+5. If you want your own published catalogs to be discoverable, see the (currently TBD) registry prerequisite in [Catalog Publishing](#catalog-publishing-catalogpublish).
 
 **Replacing the application simulator with your own application**
 
-The application simulator containers (`app-bap` and `app-bpp`) are simple simulators. Replace either with your own application by updating the service image and webhook URLs in the compose file and routing configs. Your application needs to accept POSTed beckn messages at the configured endpoints and be on the same Docker network.
+The application simulator containers (`sandbox-bap` and `sandbox-bpp`) are simple simulators. Replace either with your own application by updating the service image and webhook URLs in the compose file and routing configs. Your application needs to accept POSTed beckn messages at the configured endpoints and be on the same Docker network.
 
 **Using a different beckn domain**
 
@@ -584,15 +789,15 @@ Update the `domain` (or `networkId`) field in all four routing YAML files to mat
 
 **Containers fail to start**
 
-Check for port conflicts on 8081, 8082, 3001, 3002, or 6379:
+Check for port conflicts on 8081, 8082, 9000, 3001, 3002, or 6379:
 
 ```shell
 docker compose -f docker-compose-generic.yml logs
 ```
 
-**app-bap or app-bpp stays in `starting` state**
+**sandbox-bap or sandbox-bpp stays in `starting` state**
 
-The application containers health-check at `/api/health`. If they don't reach `healthy` within about a minute, inspect their logs. Note that the Docker container names in the compose file are `sandbox-bap` and `sandbox-bpp` (use those in Docker commands even though we refer to them conceptually as `app-bap` / `app-bpp`):
+The application containers health-check at `/api/health`. If they don't reach `healthy` within about a minute, inspect their logs:
 
 ```shell
 docker compose -f docker-compose-generic.yml logs sandbox-bap
@@ -601,7 +806,7 @@ docker compose -f docker-compose-generic.yml logs sandbox-bpp
 
 **Postman requests return connection errors**
 
-Confirm the stack is fully up (`docker compose ps` shows all five containers as `running` or `healthy`) and that your Postman collection variables point to the right host and port.
+Confirm the stack is fully up (`docker compose ps` shows all six containers as `running` or `healthy`) and that your Postman collection variables point to the right host and port.
 
 **Signature validation failures (`validateSign` errors in logs)**
 
@@ -615,11 +820,11 @@ The Discovery Service must be reachable. Check the URL configured in `generic-ro
 curl -s https://<discovery-service>/beckn
 ```
 
-If it times out, the testnet may be temporarily unavailable, or your network may block outbound HTTPS. Also check whether `publish` was called first — the Discovery Service can only return results for offerings that have been published to the Catalog Service.
+If it times out, the testnet may be temporarily unavailable, or your network may block outbound HTTPS. `discover` does **not** depend on you having called `publish` — it's served from whatever a crawler has already indexed across the network. If you expected to see your *own* published catalog specifically, check that your DeDi registry entry actually carries `meta.catalog_index_urls` (see [Catalog Publishing](#catalog-publishing-catalogpublish)) — a crawler has no other way to find it, and there's no immediate feedback if that field is missing.
 
-**`publish` or `on_publish` not working**
+**`catalog/publish` not working**
 
-Confirm the Catalog Service endpoint in `generic-routing-BPPCaller.yaml` is reachable (`curl -s https://fabric.nfh.global/beckn/catalog`). Also verify the BPP's signing keys are valid by reviewing the `keyManager` section in `generic-bpp.yaml`.
+There is no `on_publish` callback in this model — `catalog/publish` responds synchronously. Check the response body directly: `status: FAILED` with an `error` object means a fatal failure (e.g. signing); a `REJECTED` entry in `results[]` means that specific catalog was invalid (check its `reason`). Also verify the BPP's signing keys are valid by reviewing the `keyManager` section in `generic-bpp.yaml`, and that `outputRoot`/`catalogBaseURL` are set correctly (see [Catalog Publishing](#catalog-publishing-catalogpublish)).
 
 **Images fail to pull**
 
