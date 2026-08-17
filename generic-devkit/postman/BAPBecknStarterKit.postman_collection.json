@@ -22,7 +22,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\":[]\n  },\n  \"message\": {\n        \"intent\": {\n            \"filters\": {\n                \"type\": \"jsonpath\",\n                \"expression\":\"$.catalogs[*] ? (@.id == \\\"staging.p-node.fabric.nfh.global/CAT-GENERIC-001\\\")\"  \n            }\n        }\n  }\n}",
+							"raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\":[]\n  },\n  \"message\": {\n        \"intent\": {\n            \"filters\": {\n                \"type\": \"jsonpath\",\n                \"expression\":\"$.catalogs[*] ? (@.id == \\\"bpp.example.com/CAT-GENERIC-001\\\")\"  \n            }\n        }\n  }\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -191,7 +191,7 @@
 		},
 		{
 			"key": "public_url",
-			"value": "https://angular-absently-gab.ngrok-free.dev",
+			"value": "https://<your-ngrok-domain>.ngrok-free.app",
 			"description": "Base URL for bapUri / bppUri callbacks. Set to the ngrok tunnel (not host.docker.internal / beckn-router) because discover now targets a separate remote discovr stack that cannot reach a Docker-internal hostname for the async on_discover callback."
 		},
 		{

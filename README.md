@@ -343,10 +343,10 @@ curl -X POST http://localhost:8082/catalog/publish \
     "context": { "action": "catalog/publish" },
     "message": {
       "catalogs": [
-        { "id": "staging.p-node.fabric.nfh.global/CAT-GENERIC-001", "descriptor": { "name": "Generic Catalog" }, "provider": { "id": "PROV-EXAMPLE-01" }, "resources": [ /* ... */ ] }
+        { "id": "bpp.example.com/CAT-GENERIC-001", "descriptor": { "name": "Generic Catalog" }, "provider": { "id": "PROV-EXAMPLE-01" }, "resources": [ /* ... */ ] }
       ],
       "publishDirectives": [
-        { "catalogId": "staging.p-node.fabric.nfh.global/CAT-GENERIC-001", "visibleTo": ["beckn.one/testnet", "nfh.global/testnet"], "catalogType": "REGULAR" }
+        { "catalogId": "bpp.example.com/CAT-GENERIC-001", "visibleTo": ["beckn.one/testnet", "nfh.global/testnet"], "catalogType": "REGULAR" }
       ]
     }
   }'
@@ -360,7 +360,7 @@ The request body has an envelope shape of `context`/`message.catalogs[]`/`messag
 {
   "status": "COMPLETED",
   "results": [
-    { "catalogId": "staging.p-node.fabric.nfh.global/CAT-GENERIC-001", "status": "ACCEPTED", "version": 1 }
+    { "catalogId": "bpp.example.com/CAT-GENERIC-001", "status": "ACCEPTED", "version": 1 }
   ]
 }
 ```

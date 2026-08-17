@@ -198,12 +198,12 @@ modules:
         keyManager:
           id: simplekeymanager
           config:
-            subscriberId: staging.p-node.fabric.nfh.global
-            keyId: 76EU7aSyU6nCGC9i2svAkZUwJvCpBx92LvBrAZR48YVtRg3SjH86vM
-            signingPrivateKey: psy4wPmeHbD7rkF3JIYL2hbNien62BNCtr6T1C2DoaI=
-            signingPublicKey: gFoAD0w7SgnB3UaqMr7wK0uq4J0XWmfo4g+WPyhIXgY=
-            encrPrivateKey: psy4wPmeHbD7rkF3JIYL2hbNien62BNCtr6T1C2DoaI=
-            encrPublicKey: gFoAD0w7SgnB3UaqMr7wK0uq4J0XWmfo4g+WPyhIXgY=
+            subscriberId: bpp.example.com
+            keyId: 76EU7ofwRCF1aobQkShARrf1PAUsNpHqWUJoynPu9w45YFKmzqaPmy
+            signingPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
+            signingPublicKey: CqVy97DW45bcZPPrWIYGe2ldl9C93NFeVciiAEYsvR0=
+            encrPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
+            encrPublicKey: CqVy97DW45bcZPPrWIYGe2ldl9C93NFeVciiAEYsvR0=
         catalogPublisher:
           id: catalogpublisher
           config:
@@ -212,7 +212,7 @@ modules:
             # Public URL prefix outputRoot is served under (beckn-router's
             # ngrok tunnel, /beckn/* route in install/Caddyfile). Update if
             # your ngrok domain changes.
-            catalogBaseURL: "https://angular-absently-gab.ngrok-free.dev/beckn"
+            catalogBaseURL: "https://<your-ngrok-domain>.ngrok-free.app/beckn"
             # Read-only, warn-only: checks whether this node's DeDi registry
             # record links this catalog index via meta.catalog_index_urls.
             checkCatalogIndexLink: "true"
