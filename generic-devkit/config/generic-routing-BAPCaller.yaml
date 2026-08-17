@@ -20,14 +20,11 @@ routingRules:
       - rate
       - support
 
-  # Discovery: routed to the standalone discovr stack (public URL, not the
-  # local docker-compose.onix-crawler.yml instance). No excludeAction — the
-  # router appends the endpoint name by convention, so this resolves to
-  # https://34.93.165.42.sslip.io/beckn/discover.
+  # Discovery: routed to Discover Service
   - domain: "beckn.one/testnet"
     version: "2.0.0"
     targetType: "url"
     target:
-      url: "https://34.93.165.42.sslip.io/beckn"
+      url: "https://34.93.165.42.sslip.io/beckn"   # Replace with your Discover service endpoint
     endpoints:
       - discover
