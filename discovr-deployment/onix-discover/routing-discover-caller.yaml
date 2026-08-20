@@ -1,0 +1,45 @@
+# Caller routing — outbound traffic from our service through Onix to the network.
+#
+# Three outbound flows:
+#   - on_discover           → BAP (per-request URL from body's context.bapUri)
+#   - catalog/subscription  → Catalg (sync; fixed Catalg URL)
+#   - catalog/pull          → Catalg (async; fixed Catalg URL)
+#
+# v1.7+ router strips the module's basePath (/caller/) and takes the FULL
+# remaining path as the endpoint name (e.g. /caller/catalog/subscription →
+# endpoint "catalog/subscription"). Compound endpoints — PR #743. target.url
+# is the bare base WITHOUT any action segment; router composes <url>/<endpoint>.
+#
+# targetType: bap → Onix's router reads context.bapUri from the body and forwards
+# to that URL. response-dispatcher preserves bapUri from the inbound discover request.
+#
+# For version 2.x.x, Onix ignores the `domain` field entirely (and never reads
+# `networkId`). Match is purely by version + endpoint.
+
+routingRules:
+  # ──────────────────────────────────────────────────────────────
+  # on_discover → BAP via context.bapUri
+  # ──────────────────────────────────────────────────────────────
+  - version: "2.0.0"
+    targetType: "bap"
+    endpoints:
+      - on_discover
+
+  # ──────────────────────────────────────────────────────────────
+  # catalog/subscription + catalog/pull → Catalg (release-1.3.0, /beckn prefix)
+  #   POST /caller/catalog/subscription → <catalg>/beckn/catalog/subscription
+  #   POST /caller/catalog/pull         → <catalg>/beckn/catalog/pull
+  #
+  # Catalg base URL is fixed per deployment. Replace with the real value
+  # before going live (e.g. https://catalg.<your-network>).
+  # ──────────────────────────────────────────────────────────────
+  - version: "2.0.0"
+    targetType: "url"
+    target:
+      url: "https://fabric.nfh.global/beckn"
+      # final URL composition:
+      #   /beckn + catalog/subscription → https://fabric.nfh.global/beckn/catalog/subscription
+      #   /beckn + catalog/pull         → https://fabric.nfh.global/beckn/catalog/pull
+    endpoints:
+      - catalog/subscription
+      - catalog/pull

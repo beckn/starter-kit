@@ -1,0 +1,40 @@
+# Receiver routing — inbound traffic from the Beckn network into our Discover stack.
+#
+# v1.7+ router strips the module's basePath (/receiver/) and takes the FULL
+# remaining path as the endpoint name (e.g. /receiver/catalog/push → endpoint
+# "catalog/push"). Compound endpoints — PR #743. target.url is the bare base
+# WITHOUT any action segment; router composes <url>/<endpoint>.
+#
+# For version 2.x.x, Onix ignores the `domain` field entirely (and never reads
+# `networkId`). Match is purely by version + endpoint.
+
+routingRules:
+  # ──────────────────────────────────────────────────────────────
+  # BAP `discover` → catalog-discover-job /beckn/discover
+  # ──────────────────────────────────────────────────────────────
+  - version: "2.0.0"
+    targetType: "url"
+    target:
+      url: "http://catalog-discover-job:8080/beckn"
+      # final URL: http://catalog-discover-job:8080/beckn/discover
+    endpoints:
+      - discover
+
+  # ──────────────────────────────────────────────────────────────
+  # Catalg `catalog/push` and `catalog/on_pull` → catalog-publish /beckn/*
+  # release-1.3.0 added a global `/beckn` API prefix (PR #218) via
+  # BecknPrefixHandlerMapping. All controller paths now sit under /beckn/*.
+  # NOTE: catalog/on_pull is served by BOTH discoverReceiver (strict) and
+  # discoverReceiverOnPull (schema-bypass); addRoute reads this same file for
+  # both, so the route lives here once. NPM sends /beckn/catalog/on_pull to the
+  # bypass handler — see discover-adapter.yaml `discoverReceiverOnPull` (v1.5.0).
+  # ──────────────────────────────────────────────────────────────
+  - version: "2.0.0"
+    targetType: "url"
+    target:
+      url: "http://catalog-publish:8080/beckn"
+      # final URLs: http://catalog-publish:8080/beckn/catalog/push
+      #             http://catalog-publish:8080/beckn/catalog/on_pull
+    endpoints:
+      - catalog/push
+      - catalog/on_pull
