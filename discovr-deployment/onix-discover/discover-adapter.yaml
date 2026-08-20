@@ -1,0 +1,377 @@
+# Onix-discover adapter config for the Discovr deployment.
+#
+# Sits in front of the Beckn Discovr stack. Two modules in one process:
+#
+#   - discoverReceiver  (public)   — accepts inbound traffic from the Beckn network
+#                                    (BAP `discover`, Catalg `catalog/push`)
+#                                    Validates signature → routes to internal services.
+#
+#   - discoverCaller    (internal) — accepts outbound traffic from our own services
+#                                    (response-dispatcher posts on_discover here)
+#                                    Signs → routes to BAP via context.bapUri.
+#
+# Volume-mounted at /app/config by the compose file.
+#
+# ── Before production deploy ──────────────────────────────────────────────────
+#   - Replace placeholder networkParticipant / keys with real values from DeDi.
+#   - Uncomment validateSign in receiver.steps and sign in caller.steps.
+
+appName: "onix-discover"
+
+log:
+  level: info
+  destinations:
+    - type: stdout
+  # Beckn v2.0 request bodies use camelCase context fields. Onix accepts both
+  # `transactionId` / `messageId` (aliases) and the snake_case canonical forms;
+  # we use camelCase to match the request body. (See pkg/model/model.go.)
+  contextKeys:
+    - transactionId
+    - messageId
+
+http:
+  port: 8080
+  timeout:
+    read: 30
+    write: 30
+    idle: 30
+
+pluginManager:
+  root: ./plugins
+
+modules:
+  # ───────────────────────────────────────────────────────────────
+  # discoverReceiver — public endpoint
+  # Public URL: https://discover.<your-domain>/receiver/
+  # Routes (defined in routing-discover-receiver.yaml):
+  #   - discover  → catalog-discover-job (/beckn/discover)
+  #   - push      → catalog-publish      (/catalog/push)
+  # ───────────────────────────────────────────────────────────────
+  - name: discoverReceiver
+    path: /receiver/
+    handler:
+      type: std
+      role: bpp                            # Discover plays the BPP role from BAPs' perspective
+      # Handler-level identity used by onix_plugin_info metric labels and as the
+      # fallback for ctx.SubID when reqpreprocessor doesn't populate from body.
+      # MUST equal the simplekeymanager networkParticipant below + DISCOVERY_BPP_ID
+      # env on catalog-discover-job + DeDi-registered subscriberId.
+      subscriberId: fabric.nfh.global
+      httpClientConfig:
+        maxIdleConns: 1000
+        maxIdleConnsPerHost: 200
+        idleConnTimeout: 300s
+        responseHeaderTimeout: 5s
+      plugins:
+        registry:
+          id: dediregistry
+          config:
+            # v1.7+ — `url` is locked in beckn-constants (canonical value injected
+            # from pkg/beckndefaults/beckn-constants.yaml; startup errors on mismatch).
+            # `registryName` is hardcoded internally since v1.7.0 (PR #725).
+            # Restrict signature verification to subscribers in these network memberships.
+            # Uncomment + set comma-separated list to enforce; leave commented to accept any
+            # subscriber the registry returns (no network-membership filtering).
+            # allowedNetworkIDs: "nfh.global/beckn-nodes,beckn.one/testnet,nfh.global/testnet"
+            timeout: 10
+            retry_max: "3"
+            retry_wait_min: "100ms"
+            retry_wait_max: "500ms"
+        keyManager:
+          id: simplekeymanager
+          config:
+            # Replace placeholders with real production keys before going live.
+            # LOCAL TESTING — dummy 32-byte zero-seed base64 so simplekeymanager
+            # parses cleanly on startup. Replace with real keys for production.
+            # v1.7+ uses `subscriberId`; the old `networkParticipant` alias was deprecated.
+            subscriberId: fabric.nfh.global
+            keyId: local-test-key-id
+            signingPrivateKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            signingPublicKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            encrPrivateKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            encrPublicKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        cache:
+          id: cache
+          config:
+            addr: redis:6379
+        # payloadStore — enables messageId correlation for 4-line solicited
+        # callback signatures (NFH-004 §3.3). Backed by Redis (shared cache);
+        # namespace is hardcoded to "onix" in stdHandler so receiver writes
+        # are findable from caller lookups across modules.
+        payloadStore:
+          id: payloadstore
+          config:
+            ttl: "24h"
+            indexTTL: "25h"
+            maxBodyBytes: "1048576"
+            storeBody: "true"
+            storeSignature: "true"
+            compress: "true"
+        schemaValidator:
+          id: schemav2validator
+          config:
+            # type and location removed — overridable defaults injected from
+            # beckn-constants (pkg/beckndefaults/beckn-constants.yaml).
+            cacheTTL: "3600"
+            extendedSchema_enabled: "false"
+            extendedSchema_cacheTTL: "86400"
+            extendedSchema_maxCacheSize: "100"
+            extendedSchema_downloadTimeout: "30"
+            extendedSchema_allowedDomains: "beckn.org,example.com,raw.githubusercontent.com"
+        signValidator:
+          id: signvalidator
+        signer:
+          id: signer       # required by signAck response step
+        router:
+          id: router
+          config:
+            routingConfig: ./config/routing-discover-receiver.yaml
+        middleware:
+          - id: reqpreprocessor
+            config:
+              contextKeys: transactionId,messageId
+              role: bpp
+      # signAck is recognized inside `steps:` by stdHandler.initSteps and
+      # appended to the handler's internal responseSteps slice. There is NO
+      # separate `responseSteps:` YAML key — Config struct has no such field.
+      steps:
+        - validateSign       # verify inbound Beckn HTTP-signature
+        - validateSchema     # validate against Beckn v2.0 OpenAPI
+        - addRoute           # match endpoint to a routing rule
+        - storePayload       # cache inbound request by messageId for later 4-line callback signing
+        - signAck            # sign synchronous ACK responses (NFH-004 §3.4)
+
+  # ───────────────────────────────────────────────────────────────
+  # discoverReceiverOnPull — public endpoint for catalog/on_pull ONLY  (v1.5.0)
+  # Internal URL: http://onix-discover:8080/receiver-on-pull/
+  # Identical to discoverReceiver above with ONE difference: `validateSchema`
+  # is omitted from steps. catalog/on_pull payloads carry publishDirectives that
+  # are not expressible under the strict Beckn v2.0 OpenAPI, so the schema check
+  # is skipped for on_pull only — validateSign, addRoute, storePayload and signAck
+  # all still run. Everything else keeps hitting the strict discoverReceiver.
+  # NPM sends /beckn/catalog/on_pull here via a more-specific rewrite; all other
+  # /beckn/* traffic falls through to /receiver/ (discoverReceiver). Mirrors the
+  # staging becknReceiverOnPull handler.
+  # ───────────────────────────────────────────────────────────────
+  - name: discoverReceiverOnPull
+    path: /receiver-on-pull/
+    handler:
+      type: std
+      role: bpp
+      subscriberId: fabric.nfh.global
+      httpClientConfig:
+        maxIdleConns: 1000
+        maxIdleConnsPerHost: 200
+        idleConnTimeout: 300s
+        responseHeaderTimeout: 5s
+      plugins:
+        registry:
+          id: dediregistry
+          config:
+            timeout: 10
+            retry_max: "3"
+            retry_wait_min: "100ms"
+            retry_wait_max: "500ms"
+        keyManager:
+          id: simplekeymanager
+          config:
+            subscriberId: fabric.nfh.global
+            keyId: local-test-key-id
+            signingPrivateKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            signingPublicKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            encrPrivateKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            encrPublicKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        cache:
+          id: cache
+          config:
+            addr: redis:6379
+        payloadStore:
+          id: payloadstore
+          config:
+            ttl: "24h"
+            indexTTL: "25h"
+            maxBodyBytes: "1048576"
+            storeBody: "true"
+            storeSignature: "true"
+            compress: "true"
+        # Declared (like discoverReceiver) so plugin wiring is identical; it is simply
+        # never invoked because the validateSchema step is omitted from `steps` below.
+        schemaValidator:
+          id: schemav2validator
+          config:
+            cacheTTL: "3600"
+            extendedSchema_enabled: "false"
+            extendedSchema_cacheTTL: "86400"
+            extendedSchema_maxCacheSize: "100"
+            extendedSchema_downloadTimeout: "30"
+            extendedSchema_allowedDomains: "beckn.org,example.com,raw.githubusercontent.com"
+        signValidator:
+          id: signvalidator
+        signer:
+          id: signer       # required by signAck response step
+        router:
+          id: router
+          config:
+            routingConfig: ./config/routing-discover-receiver.yaml
+        middleware:
+          - id: reqpreprocessor
+            config:
+              contextKeys: transactionId,messageId
+              role: bpp
+      # validateSchema deliberately omitted — the only pipeline difference vs
+      # discoverReceiver above.
+      steps:
+        - validateSign       # verify inbound Beckn HTTP-signature
+        - addRoute           # match endpoint to a routing rule
+        - storePayload       # cache inbound request by messageId for later 4-line callback signing
+        - signAck            # sign synchronous ACK responses (NFH-004 §3.4)
+
+  # ───────────────────────────────────────────────────────────────
+  # discoverCaller — internal endpoint
+  # Internal URL: http://onix-discover:8080/caller/
+  # response-dispatcher posts on_discover bodies here (STATIC_CALLBACK_URL).
+  # Routes (defined in routing-discover-caller.yaml):
+  #   - on_discover → BAP (targetType: bap → context.bapUri)
+  # ───────────────────────────────────────────────────────────────
+  - name: discoverCaller
+    path: /caller/
+    handler:
+      type: std
+      role: bpp
+      # Same handler-level identity as receiver — single subscriber per Discovr instance.
+      subscriberId: fabric.nfh.global
+      httpClientConfig:
+        maxIdleConns: 1000
+        maxIdleConnsPerHost: 200
+        idleConnTimeout: 300s
+        responseHeaderTimeout: 5s
+      plugins:
+        registry:
+          id: dediregistry
+          config:
+            # v1.7+ — `url` is locked in beckn-constants (canonical value injected
+            # from pkg/beckndefaults/beckn-constants.yaml; startup errors on mismatch).
+            # `registryName` is hardcoded internally since v1.7.0 (PR #725).
+            # Restrict signature verification to subscribers in these network memberships.
+            # Uncomment + set comma-separated list to enforce; leave commented to accept any
+            # subscriber the registry returns (no network-membership filtering).
+            # allowedNetworkIDs: "nfh.global/beckn-nodes,beckn.one/testnet,nfh.global/testnet"
+            timeout: 10
+            retry_max: "3"
+            retry_wait_min: "100ms"
+            retry_wait_max: "500ms"
+        keyManager:
+          id: simplekeymanager
+          config:
+            # Caller uses these keys to SIGN outbound on_discover.
+            # The body's context.bppId MUST equal this subscriberId value —
+            # catalog-discover-job stamps it via DISCOVERY_BPP_ID. Keep them in sync.
+            # LOCAL TESTING — dummy 32-byte zero-seed base64 so simplekeymanager
+            # parses cleanly on startup. Replace with real keys for production.
+            # v1.7+ uses `subscriberId`; the old `networkParticipant` alias was deprecated.
+            subscriberId: fabric.nfh.global
+            keyId: local-test-key-id
+            signingPrivateKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            signingPublicKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            encrPrivateKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+            encrPublicKey: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        cache:
+          id: cache
+          config:
+            addr: redis:6379
+        # payloadStore — enables messageId correlation for 4-line solicited
+        # callback signatures (NFH-004 §3.3). Backed by Redis (shared cache);
+        # namespace is hardcoded to "onix" in stdHandler so receiver writes
+        # are findable from caller lookups across modules.
+        payloadStore:
+          id: payloadstore
+          config:
+            ttl: "24h"
+            indexTTL: "25h"
+            maxBodyBytes: "1048576"
+            storeBody: "true"
+            storeSignature: "true"
+            compress: "true"
+        schemaValidator:
+          id: schemav2validator
+          config:
+            # type and location removed — overridable defaults injected from
+            # beckn-constants (pkg/beckndefaults/beckn-constants.yaml).
+            cacheTTL: "3600"
+            extendedSchema_enabled: "false"
+            extendedSchema_cacheTTL: "86400"
+            extendedSchema_maxCacheSize: "100"
+            extendedSchema_downloadTimeout: "30"
+            extendedSchema_allowedDomains: "beckn.org,example.com,raw.githubusercontent.com"
+        signer:
+          id: signer
+        signValidator:
+          id: signvalidator   # required by validateAckSign response step
+        router:
+          id: router
+          config:
+            routingConfig: ./config/routing-discover-caller.yaml
+        middleware:
+          - id: reqpreprocessor
+            config:
+              contextKeys: transactionId,messageId
+              role: bpp
+      steps:
+        - addRoute            # router uses context.bapUri (targetType: bap)
+        - sign                # sign outbound on_discover (3-line; 4-line if payloadStore has the orig request)
+        - validateSchema      # validate outbound on_discover against Beckn v2.0 OpenAPI
+        - storePayload        # cache outbound request by messageId (paired with receiver's storePayload)
+        - validateAckSign     # verify synchronous ACK from upstream (NFH-004 §3.4)
+
+  # ───────────────────────────────────────────────────────────────
+  # crawl — decentralized-catalog crawler (ported from stage)
+  # Acts as a BAP pulling manifests/catalogs from provider DeDi index URLs,
+  # then pushing the verified result into this VM stack's own catalog-publish
+  # via CRAWLER_PUSH_ENDPOINT. No Kong/NPM exposure — /crawl stays internal.
+  # ───────────────────────────────────────────────────────────────
+  - name: crawl
+    path: /crawl
+    handler:
+      type: crawl
+      role: bap
+      httpClientConfig:
+        maxIdleConns: 1000
+        maxIdleConnsPerHost: 200
+        idleConnTimeout: 300s
+        responseHeaderTimeout: 5s
+      plugins:
+        # REQUIRED — trust anchor the crawler resolves the verifying key from
+        # ({index nodeId, signature keyId}) to check catalog self-signatures.
+        registry:
+          id: dediregistry
+          config:
+            timeout: "10"
+            retry_max: "3"
+            retry_wait_min: "100ms"
+            retry_wait_max: "500ms"
+        crawler:
+          id: crawler
+          config:
+            CRAWLER_ENABLED: "true"
+            # This VM's own Postgres (same instance catalog-discover-job / catalog-publish use).
+            CRAWLER_DB_DSN: "postgres://discover_user:discover_password@postgres:5432/discover_db?sslmode=disable"
+            # Internal route to catalog-publish's /beckn/catalog/push (container-name DNS,
+            # same network as the rest of this compose stack).
+            CRAWLER_PUSH_ENDPOINT: "http://catalog-publish:8080/beckn/catalog/push"
+            # This VM's public BPP identity — matches DISCOVERY_BPP_URI on catalog-discover-job.
+            CRAWLER_BPP_URI: "https://34.93.165.42.sslip.io/beckn/"
+            # Ignored once CRAWLER_REGISTRY_URL is set — left as a non-resolving
+            # placeholder only so the field isn't empty if registry discovery is
+            # ever disabled.
+            CRAWLER_INDEX_URLS: "http://catalog-source.invalid/none"
+            CRAWLER_NETWORK_IDS: "beckn.one/testnet,nfh.global/testnet"
+            CRAWLER_REGISTRY_URL: "https://fabric.nfh.global/registry/dedi"
+            CRAWLER_INDEX_INTERVAL: "5m"
+            CRAWLER_CATALOG_INTERVAL: "1m"
+            CRAWLER_FETCH_TIMEOUT: "30s"
+            CRAWLER_MAX_ARTIFACT_BYTES: "10485760"
+            CRAWLER_MAX_DECOMPRESSED_BYTES: "104857600"
+            CRAWLER_MAX_PUSH_BYTES: "10485760"
+            CRAWLER_MAX_ATTEMPTS: "5"
+            CRAWLER_MERGE_ONLY: "true"
+            CRAWLER_LOG_LEVEL: "info"

@@ -1,0 +1,472 @@
+# discovr-stack.yml
+#
+# Beckn Discovr — VM / public deployment with Onix adapter in front.
+#
+# Topology:
+#   Internet ── NPM (80/443) ──> onix-discover /receiver/  ──> { catalog-discover-job, discovr-ingestion }
+#                                                                       │
+#   response-dispatcher ─── POST on_discover ─── onix-discover /caller/ ──> BAP
+#
+# Onix sits in front of all inbound Beckn traffic (validateSign + schema validation
+# happen there). On the outbound side, response-dispatcher posts on_discover to
+# onix-discover/caller via STATIC_CALLBACK_URL, and Onix routes to context.bapUri.
+#
+# ── First-time setup ───────────────────────────────────────────────────────────
+#   1. docker network create beckn-network
+#   2. Populate ./onix-discover/discover-adapter.yaml with real DeDi + signing keys
+#   3. docker compose -f discovr-stack.yml up -d
+#   4. Open http://<VM-IP>:81  →  NPM admin UI (default admin@example.com / changeme)
+#   5. Configure NPM proxy hosts (see "NPM proxy host setup" below)
+#
+# ── Firewall rules needed on the VM ───────────────────────────────────────────
+#   Allow inbound TCP 80, 443, 81 (NPM admin — restrict to your IP), 22 (SSH)
+#   Block everything else inbound
+#
+# ── NPM proxy host setup ──────────────────────────────────────────────────────
+#   In NPM UI → Proxy Hosts → Add Proxy Host:
+#
+#   Host 1 — Public Beckn endpoint (single entry point via Onix receiver)
+#     Domain Names:     discover.<your-domain>
+#     Scheme:           http
+#     Forward Hostname: onix-discover
+#     Forward Port:     8080
+#     Custom Locations:
+#       Location /receiver/  →  http://onix-discover:8080
+#
+# ── Directory layout ──────────────────────────────────────────────────────────
+#   discovr-stack.yml          (this file)
+#   onix-discover/
+#     discover-adapter.yaml    (Onix adapter config — receiver + caller modules)
+#     routing-discover-receiver.yaml
+#     routing-discover-caller.yaml
+#   elasticsearch/
+#     es-index-template.json   (catalog index mapping)
+#     es-synonyms.txt          (search synonym rules)
+
+services:
+
+  # ── Infrastructure ────────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgis/postgis:15-3.3
+    container_name: discovery-postgres
+    ports:
+      - "127.0.0.1:5434:5432" # VM-internal only — not reachable from internet
+    environment:
+      POSTGRES_DB: discover_db
+      POSTGRES_USER: discover_user
+      POSTGRES_PASSWORD: discover_password
+      POSTGRESQL_POSTGRES_PASSWORD: discover_password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    volumes:
+      - postgres_discovery_data:/var/lib/postgresql/data
+    networks:
+      - beckn-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U discover_user -d discover_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.3.1
+    container_name: discovery-elasticsearch
+    ports:
+      - "127.0.0.1:9200:9200" # VM-internal only
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+      # synonyms_path in ES template is relative to ES config dir (/usr/share/elasticsearch/config/)
+      - ./elasticsearch/es-synonyms.txt:/usr/share/elasticsearch/config/config/es-synonyms.txt
+    networks:
+      - beckn-network
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/9200' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Service name = `discovery-kafka` (not `kafka`) so we don't collide with the
+  # catalog stack on a shared `beckn-network`. Both stacks register their service
+  # name as a DNS alias, and `kafka` becomes ambiguous (round-robin between brokers).
+  discovery-kafka:
+    image: bitnamilegacy/kafka:3.9.0
+    container_name: discovery-kafka
+    ports:
+      - "127.0.0.1:9093:9092" # VM-internal only
+    environment:
+      - KAFKA_CFG_NODE_ID=1
+      - KAFKA_CFG_PROCESS_ROLES=broker,controller
+      - KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=1@discovery-kafka:9093
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:29092,CONTROLLER://:9093,EXTERNAL://:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://discovery-kafka:29092,EXTERNAL://localhost:9092
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+      - KAFKA_CFG_LOG_RETENTION_HOURS=24
+      # v1.5.0: 10 MiB uniform Kafka message ceiling (matches staging / Catalg #487).
+      # Producers now send up to 10 MiB (CATALOG_MAX_PAYLOAD_SIZE); the broker default
+      # (~1 MiB) would reject them. replica.fetch.max.bytes must be >= message.max.bytes.
+      - KAFKA_CFG_MESSAGE_MAX_BYTES=10485760
+      - KAFKA_CFG_REPLICA_FETCH_MAX_BYTES=10485760
+    volumes:
+      - kafka_data:/bitnami/kafka
+    networks:
+      - beckn-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:29092 --list > /dev/null 2>&1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    # Required by onix-discover's `cache` plugin (key/signature caching).
+    image: redis:7-alpine
+    container_name: discovery-redis
+    ports:
+      - "127.0.0.1:6379:6379" # VM-internal only
+    volumes:
+      - redis_data:/data
+    networks:
+      - beckn-network
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Application services ──────────────────────────────────────────────────────
+  # No host port bindings — Nginx is the only public entry point.
+
+  catalog-publish:
+    image: fidedocker/catalog-publish-job:v1.6.0@sha256:3ea4951be85b1defeedff2142c0615197f0a11e02351ec83b1cef7aeb367bae9
+    platform: linux/amd64
+    container_name: catalog-publish
+    expose:
+      - "8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_FLYWAY_BASELINE_ON_MIGRATE=true
+      - SPRING_FLYWAY_BASELINE_VERSION=0
+      - SPRING_FLYWAY_TABLE=flyway_schema_history_publish_no_dist
+      - APP_DATASOURCE_URL=jdbc:postgresql://postgres:5432/discover_db
+      - APP_DATASOURCE_USERNAME=discover_user
+      - APP_DATASOURCE_PASSWORD=discover_password
+      - DB_PASSWORD=discover_password
+      - APP_MESSAGING_BROKER_SERVERS=discovery-kafka:29092
+      - APP_MESSAGING_TOPICS_INGESTION_REQUESTS=discovr.publish.in.requests
+      - APP_MESSAGING_TOPICS_CATALOG_EVENTS=discovr.publish.out.events
+      - APP_MESSAGING_TOPICS_RESPONSES=discovr.publish.out.responses
+      - APP_MESSAGING_TOPICS_FAILED=discovr.publish.dlt.requests
+      # ── v1.5.0: Kafka large-message sizing (10 MiB). CATALOG_MAX_PAYLOAD_SIZE also
+      # drives the producer max.request.size; must stay <= broker KAFKA_CFG_MESSAGE_MAX_BYTES. ──
+      - KAFKA_MAX_REQUEST_SIZE=10485760
+      - KAFKA_MAX_PARTITION_FETCH_BYTES=10485760
+      - KAFKA_FETCH_MAX_BYTES=52428800
+      - CATALOG_MAX_PAYLOAD_SIZE=10485760
+      - APP_CATALOG_VALIDATION_ENABLED=false
+      - BECKN_PROTOCOL_API_SCHEMA_URL=https://raw.githubusercontent.com/beckn/protocol-specifications-v2/refs/tags/core-v2.0.0-lts/api/v2.0.0/beckn.yaml
+      - BECKN_API_PREFIX=/beckn
+      # NEW on release-1.3.0: caps the size of indexed text blobs (used by ES full_text_blob field)
+      - CATALOG_INDEXING_MAX_TEXT_BLOB_BYTES=8192
+      - JAVA_OPTS=-Xmx756m -Xms256m -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+      - JAVA_TOOL_OPTIONS=
+      - OTEL_TRACES_EXPORTER=none
+      - OTEL_METRICS_EXPORTER=none
+      - OTEL_LOGS_EXPORTER=none
+      # Auth handled by Onix in front — disable in-app signature verification.
+      - SIGNATURE_AUTH_ENABLED=false
+      - SIGNATURE_REGISTRY_BASE_URL=https://fabric.nfh.global/registry/dedi/lookup
+      - SIGNATURE_REGISTRY_NAME=subscribers.beckn.one
+      - SIGNATURE_REGISTRY_TOKEN=
+      - SIGNATURE_CLOCK_SKEW_SECONDS=30
+      - SIGNATURE_CACHE_TTL_SECONDS=2592000
+      - SIGNATURE_CACHE_MAX_KEYS=100
+      - SIGNATURE_TIMEOUT_SECONDS=10
+      - SIGNATURE_RETRY_ATTEMPTS=3
+      - SIGNATURE_WHITELISTED_ENDPOINTS=
+      # Elasticsearch indexing
+      - APP_CATALOG_ELASTICSEARCH_ENABLED=true
+      - ES_HOSTS=http://elasticsearch:9200
+      - APP_CATALOG_ELASTICSEARCH_INDEX_PREFIX=beckn-catalog
+      - APP_CATALOG_ELASTICSEARCH_ALIAS_NAME=beckn-catalog
+      - APP_CATALOG_ELASTICSEARCH_FAILURE_TOPIC=discovr.publish.es.failures
+      - APP_CATALOG_ELASTICSEARCH_FINAL_DLQ_TOPIC=discovr.publish.es.dlt
+      - APP_CATALOG_ELASTICSEARCH_BULK_BATCH_SIZE=100
+      - APP_CATALOG_ELASTICSEARCH_RETRY_ATTEMPTS=3
+      - APP_CATALOG_ELASTICSEARCH_RETRY_INITIAL_DELAY_MS=1000
+      - APP_CATALOG_ELASTICSEARCH_POOL_SIZE=2
+      - APP_CATALOG_ELASTICSEARCH_POOL_QUEUE_CAPACITY=200
+      - APP_CATALOG_ELASTICSEARCH_MAX_FAILURE_ATTEMPTS=5
+      - APP_CATALOG_ELASTICSEARCH_MAPPING_TOTAL_FIELDS_LIMIT=2000
+      - APP_CATALOG_ELASTICSEARCH_MAPPING_DEPTH_LIMIT=10
+      - ES_MAPPING_TEMPLATE_FILE=/config/es-index-template.json
+      - CATALOG_TEXT_SEARCH_EMBEDDING_ENABLED=false
+      # fix(discovery): resources published without a schemaType were silently
+      # dropped by ElasticIndexStep (event=es.failed reason=schema-type-missing).
+      # Fallback index is fully searchable via the shared beckn-catalog alias.
+      - APP_CATALOG_ELASTICSEARCH_DEFAULT_SCHEMA_TYPE=GenericResource
+      # ── v1.5.0: /catalog/on_pull download hardening + tuning (matches staging) ──
+      - APP_CATALOG_PULL_MAX_DOWNLOAD_BYTES=52428800
+      - APP_CATALOG_PULL_MAX_DECOMPRESSED_BYTES=209715200
+      - APP_CATALOG_PULL_DOWNLOAD_MAX_ATTEMPTS=3
+      - APP_CATALOG_PULL_DOWNLOAD_RETRY_BACKOFF_MS=1000
+      - APP_CATALOG_PULL_DNS_CACHE_TTL_SECONDS=10
+      - APP_CATALOG_PULL_CONNECT_TIMEOUT_MS=10000
+      - APP_CATALOG_PULL_READ_TIMEOUT_MS=30000
+      - APP_CATALOG_PULL_EXECUTOR_CORE_POOL_SIZE=4
+      - APP_CATALOG_PULL_EXECUTOR_MAX_POOL_SIZE=8
+      - APP_CATALOG_PULL_EXECUTOR_QUEUE_CAPACITY=100
+    volumes:
+      - ./elasticsearch/es-index-template.json:/config/es-index-template.json
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      discovery-kafka:
+        condition: service_healthy
+    networks:
+      - beckn-network
+    restart: unless-stopped
+    healthcheck:
+      # Actuator stays at /actuator/* (not under /beckn) on release-1.3.0
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  catalog-discover-job:
+    image: fidedocker/catalog-discover-job:v1.6.0@sha256:da3dfd9066ffb861a639bea0c85fc1d3b358cfb3392f72f7b8e3abf73c112d19
+    platform: linux/amd64
+    container_name: catalog-discover-job
+    expose:
+      - "8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - KAFKA_BOOTSTRAP_SERVERS=discovery-kafka:29092
+      - KAFKA_REQUEST_TOPIC=discovr.discover.in.requests
+      - KAFKA_RESPONSE_TOPIC=discovr.discover.out.responses
+      # ── v1.5.0: Kafka large-message sizing (10 MiB), matches staging ──
+      - SPRING_KAFKA_PRODUCER_PROPERTIES_MAX_REQUEST_SIZE=10485760
+      - SPRING_KAFKA_CONSUMER_PROPERTIES_MAX_PARTITION_FETCH_BYTES=10485760
+      - SPRING_KAFKA_CONSUMER_PROPERTIES_FETCH_MAX_BYTES=52428800
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      # release-1.3.0 application-docker.yml reads POSTGRES_DB / POSTGRES_USER
+      # (NOT POSTGRES_DATABASE / POSTGRES_USERNAME). Names must match exactly.
+      - POSTGRES_DB=discover_db
+      - POSTGRES_USER=discover_user
+      - POSTGRES_PASSWORD=discover_password
+      - POSTGRES_MAX_POOL_SIZE=10
+      - MAX_ITEMS_PER_CATALOG=100
+      - BECKN_PROTOCOL_API_SCHEMA_URL=https://raw.githubusercontent.com/beckn/protocol-specifications-v2/refs/tags/core-v2.0.0-lts/api/v2.0.0/beckn.yaml
+      - BECKN_API_PREFIX=/beckn
+      - SCHEMA_CACHE_TTL_HOURS=24
+      - LOGGING_LEVEL_ORG_BECKN_DISCOVER=INFO
+      - LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_KAFKA=ERROR
+      - LOGGING_LEVEL_ORG_APACHE_KAFKA=ERROR
+      - OTEL_TRACES_EXPORTER=none
+      - OTEL_METRICS_EXPORTER=none
+      - OTEL_LOGS_EXPORTER=none
+      - JAVA_OPTS=-Xmx756m -Xms256m -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0
+      # Our service's BPP identity — stamped onto outbound on_discover responses so
+      # Onix-caller's simplekeymanager keyset lookup (by context.bppId) succeeds.
+      - DISCOVERY_BPP_ID=fabric.nfh.global
+      - DISCOVERY_BPP_URI=https://34.93.165.42.sslip.io/beckn/
+      # Spatial engine: postgresql (default) or elasticsearch
+      - DISCOVERY_SPATIAL_ENGINE=elasticsearch
+      # Reject inbound intents whose intent.spatial.type doesn't match the
+      # engine's coordinate ordering (defense against malformed clients).
+      - DISCOVERY_SPATIAL_COORDINATE_CHECK_ENABLED=true
+      - ES_HOSTS=http://elasticsearch:9200
+      - ES_ALIAS=beckn-catalog
+      - ES_RESULT_LIMIT=100
+      - ES_MIN_SCORE=0.68
+      - ES_CONNECT_TIMEOUT_MS=5000
+      - ES_SOCKET_TIMEOUT_MS=30000
+      - DISCOVERY_FILTER_DISCARD_CATALOGS_WITHOUT_OFFERS=true
+      # ── v1.5.0: active/validity value-match filters (default true in v1.5.0). Set to
+      # false to keep v1.4.0 "return everything" behaviour. ──
+      - DISCOVERY_FILTER_ACTIVE_CATALOG=true
+      - DISCOVERY_FILTER_VALID_CATALOGS=true
+      # ── v1.5.0: legacy flat ACK/NACK envelope — ONA-only; keep false for this instance ──
+      - LEGACY_ACK_NACK_SUPPORT=false
+      - DISCOVERY_TEXT_SEARCH_ENGINE=native-els
+      # Auth handled by Onix in front — disable in-app signature verification.
+      - SIGNATURE_AUTH_ENABLED=false
+      - SIGNATURE_REGISTRY_BASE_URL=https://fabric.nfh.global/registry/dedi/lookup
+      - SIGNATURE_REGISTRY_NAME=subscribers.beckn.one
+      - SIGNATURE_REGISTRY_TOKEN=
+      - SIGNATURE_CLOCK_SKEW_SECONDS=30
+      - SIGNATURE_CACHE_TTL_SECONDS=2592000
+      - SIGNATURE_CACHE_MAX_KEYS=100
+      - SIGNATURE_TIMEOUT_SECONDS=10
+      - SIGNATURE_RETRY_ATTEMPTS=3
+      - SIGNATURE_WHITELISTED_ENDPOINTS=
+      - ES_TIE_BREAKER=0.3
+      - ES_FUZZINESS=AUTO
+      - ES_CONNECT_TIMEOUT_MS=5000
+      - ES_SOCKET_TIMEOUT_MS=30000
+      # Per-query timeout (seconds) for the single-path engines — cases B/C/D and the
+      # case-4 J+G combined query. Maps to discovery.parallel-query-timeout-seconds.
+      # This is NOT a chain setting; the ES->PSQL chain has its own end-to-end budget
+      # in DISCOVERY_CHAIN_TIMEOUT_SECONDS below.
+      - DISCOVERY_PARALLEL_QUERY_TIMEOUT_SECONDS=10
+      # ── ES-text -> PSQL-JSONPath chain (cases J+T and J+G+T) ─────────────────
+      # The chain only runs when DISCOVERY_SPATIAL_ENGINE=elasticsearch (above) so
+      # the ES engine bean exists; otherwise J+T / J+G+T drop the text term and run
+      # as J / J+G. ES candidate pool = min(result-limit * overfetch-factor, max-ids).
+      - DISCOVERY_CHAIN_OVERFETCH_FACTOR=10
+      - DISCOVERY_CHAIN_MAX_IDS=5000
+      # End-to-end chain timeout in seconds (ES step 1 + PSQL step 2). Absolute
+      # value; 20 ~= 2x DISCOVERY_PARALLEL_QUERY_TIMEOUT_SECONDS (two sequential calls).
+      - DISCOVERY_CHAIN_TIMEOUT_SECONDS=20
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      discovery-kafka:
+        condition: service_healthy
+    networks:
+      - beckn-network
+    restart: unless-stopped
+    healthcheck:
+      # Actuator stays at /actuator/* (not under /beckn) — release-1.3.0 BecknPrefixHandlerMapping
+      # excludes Spring's actuator endpoints from the /beckn prefix.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  response-dispatcher:
+    image: fidedocker/response-dispatcher:v1.6.0@sha256:a5023a077e13a641325995598a6ba42fe7726bed1f05fa39b6e8e127838d40e4
+    platform: linux/amd64
+    container_name: response-dispatcher
+    expose:
+      - "8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=docker
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=discovery-kafka:29092
+      - TOPICS_INPUT=discovr.discover.out.responses
+      - TOPICS_DLT=discovr.dispatcher.dlt.responses
+      - SPRING_KAFKA_CONSUMER_GROUP_ID=seeker-notifier-group
+      - SPRING_KAFKA_LISTENER_CONCURRENCY=4
+      # ── v1.5.0: Kafka large-message sizing (10 MiB), matches staging ──
+      - SPRING_KAFKA_PRODUCER_PROPERTIES_MAX_REQUEST_SIZE=10485760
+      - SPRING_KAFKA_CONSUMER_PROPERTIES_MAX_PARTITION_FETCH_BYTES=10485760
+      - SPRING_KAFKA_CONSUMER_PROPERTIES_FETCH_MAX_BYTES=52428800
+      # HTTP client tuning — fail-fast on dead/unreachable BAP callbacks so a
+      # single slow peer doesn't head-of-line-block listener threads.
+      - HTTP_CLIENT_CONNECTION_TIMEOUT=10000
+      - HTTP_CLIENT_TIMEOUT=5000
+      - HTTP_RETRY_MAX_ATTEMPTS=2
+      - OTEL_TRACES_EXPORTER=none
+      - OTEL_METRICS_EXPORTER=none
+      - OTEL_LOGS_EXPORTER=none
+      # Static callback routing — every outbound on_discover goes to Onix-caller,
+      # which signs and forwards to context.bapUri. DeDi lookup is bypassed.
+      - STATIC_CALLBACK_ENABLED=true
+      - STATIC_CALLBACK_URL=http://onix-discover:8080/caller
+      # DeDi values retained for fallback / reference — unused while STATIC_CALLBACK_ENABLED=true.
+      - REGISTRY_BASE_URL=https://fabric.nfh.global/registry/dedi/lookup
+      - REGISTRY_NAME=subscribers.beckn.one
+      # Outbound signing handled by Onix-caller — disable in-app signing here.
+      - SIGNING_ENABLED=false
+      - SIGNING_SUBSCRIBER_ID=
+      - SIGNING_KEY_ID_SUFFIX=
+      - SIGNING_PRIVATE_KEY=
+      - SIGNING_EXPIRY_SECONDS=3600
+      # Onix-caller is an internal hostname — disable SSRF guard for the static callback URL.
+      - CALLBACK_URL_VALIDATION_ENABLED=false
+    depends_on:
+      catalog-discover-job:
+        condition: service_healthy
+      onix-discover:
+        condition: service_started
+    networks:
+      - beckn-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  # ── Onix Adapter — Beckn protocol gateway (receiver + caller in one process) ──
+  # receiver  (public)  : signs verification of inbound traffic + schema validation
+  #                       routes /beckn/discover → catalog-discover-job
+  #                       routes /catalog/push   → catalog-publish
+  # caller    (internal): signs outbound on_discover responses + routes to context.bapUri
+  onix-discover:
+    # Custom crawler-plugin build (beckn-onix:feat/catalog-crawler-phase1) — public
+    # fidedocker/onix-adapter releases don't have the crawler plugin. First official,
+    # non-POC build: validated on stage (crawl + on_discover bppId/bppUri confirmed
+    # end-to-end after a full re-crawl) before promoting here.
+    image: fidedocker/onix-crawler:1.0.0@sha256:ae53de07802701db7f6dc3e622a9312e2e241b0ef5154f00481e9a3b22db7221
+    container_name: onix-discover
+    platform: linux/amd64
+    expose:
+      - "8080"
+    volumes:
+      - ./onix-discover:/app/config
+    # Image has no ENTRYPOINT; default CMD is ["sh","-c","./server --config=${CONFIG_FILE}"].
+    # Override CMD directly so we don't have to also set CONFIG_FILE.
+    command: ["./server", "--config=/app/config/discover-adapter.yaml"]
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - beckn-network
+    restart: unless-stopped
+
+  # ── Nginx Proxy Manager — web UI for routing + optional SSL ──────────────────
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: discovr-npm
+    ports:
+      - "80:80" # HTTP  — public API traffic
+      - "443:443" # HTTPS — optional; enables SSL via NPM UI
+      - "81:81" # NPM admin UI (restrict to your IP in the VM firewall)
+    volumes:
+      - npm_data:/data
+      - npm_letsencrypt:/etc/letsencrypt
+    depends_on:
+      - onix-discover
+    networks:
+      - beckn-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:81/api/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_discovery_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+  kafka_data:
+    driver: local
+  redis_data:
+    driver: local
+  npm_data:
+    driver: local
+  npm_letsencrypt:
+    driver: local
+
+networks:
+  beckn-network:
+    external: true

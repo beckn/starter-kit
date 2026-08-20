@@ -1,0 +1,22 @@
+# Beckn Discovr — Elasticsearch synonym rules
+# Format: term1, term2, term3  (all terms are equivalent; Elasticsearch expands any one to all others)
+# To add new entries: append one rule per line, then restart Elasticsearch to reload.
+# Changes take effect only after index is closed and reopened, or after a full reindex.
+
+# EV / Electric Vehicle domain
+ev, electric vehicle
+charging, charger
+charger, charging station
+kw, kilowatt
+
+# Logistics domain
+logistics, shipping, delivery
+parcel, package, shipment
+
+# Food domain
+organic, natural
+vegan, plant-based
+
+# General commerce
+discount, offer, deal
+cod, cash delivery
