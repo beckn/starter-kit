@@ -25,6 +25,9 @@ routingRules:
     version: "2.0.0"
     targetType: "url"
     target:
-      url: "https://34.93.165.42.sslip.io/beckn"   # Replace with your Discover service endpoint
+      # Prod Discover service (onix-discover on beckn-fabric-prod GKE, fronted
+      # by Kong at 34.93.165.42.sslip.io).
+      url: "https://34.93.165.42.sslip.io/beckn"
+      # Local dev alternate: url: "http://host.docker.internal:8090/receiver"
     endpoints:
       - discover
