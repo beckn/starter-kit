@@ -76,7 +76,11 @@ services:
   #     elsewhere.
   # ============================================================
   onix-bpp:
-    image: fidedocker/catalog-publisher:latest
+    # Was fidedocker/catalog-publisher:latest -- mislabeled (this service runs
+    # the onix ./server binary via its command below, same as onix-bap).
+    # Fixed to the correct image family, now pointed at :latest (includes the
+    # publisher-verification/config attribute changes from feat/916-publish-verification).
+    image: fidedocker/onix-adapter:latest
     container_name: onix-bpp
     platform: linux/amd64
     networks:

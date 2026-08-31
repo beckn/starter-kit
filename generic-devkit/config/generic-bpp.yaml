@@ -204,6 +204,13 @@ modules:
             signingPublicKey: CqVy97DW45bcZPPrWIYGe2ldl9C93NFeVciiAEYsvR0=
             encrPrivateKey: 393fVJJsfqssJCRAjedKR2cKAjSLrjU3t+bICQ5KzYM=
             encrPublicKey: CqVy97DW45bcZPPrWIYGe2ldl9C93NFeVciiAEYsvR0=
+        # catalogBlobStore: required by the catalogPublish handler -- it reads
+        # prior state from and persists publish results here (outputRoot above
+        # is no longer read directly). Same path outputRoot points to (/beckn).
+        catalogBlobStore:
+          id: localcatalogblobstore
+          config:
+            root: /beckn
         catalogPublisher:
           id: catalogpublisher
           config:
@@ -212,7 +219,7 @@ modules:
             # Public URL prefix outputRoot is served under (beckn-router's
             # ngrok tunnel, /beckn/* route in install/Caddyfile). Update if
             # your ngrok domain changes.
-            catalogBaseURL: "https://<your-ngrok-domain>.ngrok-free.app/beckn"
+            catalogBaseURL: "https://angular-absently-gab.ngrok-free.dev/beckn"
             # Read-only, warn-only: checks whether this node's DeDi registry
             # record links this catalog index via meta.catalog_index_urls.
             checkCatalogIndexLink: "true"

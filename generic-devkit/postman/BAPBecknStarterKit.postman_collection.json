@@ -8,7 +8,7 @@
 	},
 	"item": [
 		{
-			"name": "1 \u2014 Discovery",
+			"name": "1 — Discovery",
 			"item": [
 				{
 					"name": "discover",
@@ -38,14 +38,78 @@
 								"discover"
 							]
 						},
-						"description": "BAP selects resources from catalog.\n\nSpec rules (beckn.yaml):\n\u2022 Commitment.required = [status, resources, offer]\n\u2022 status.descriptor.code \u2208 {DRAFT, ACTIVE, CLOSED}\n\u2022 resources = array of Resource (each needs @type, id, descriptor, quantity)\n\u2022 offer.required = [@type, id, resourceIds]\n\u2022 @context omitted on all core beckn.yaml objects"
+						"description": "BAP selects resources from catalog.\n\nSpec rules (beckn.yaml):\n• Commitment.required = [status, resources, offer]\n• status.descriptor.code ∈ {DRAFT, ACTIVE, CLOSED}\n• resources = array of Resource (each needs @type, id, descriptor, quantity)\n• offer.required = [@type, id, resourceIds]\n• @context omitted on all core beckn.yaml objects"
+					},
+					"response": []
+				},
+				{
+					"name": "discover - textSearch",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\": []\n  },\n  \"message\": {\n    \"intent\": {\n      \"textSearch\": \"coffee\"\n    }\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{bap_adapter_url}}/discover",
+							"host": [
+								"{{bap_adapter_url}}"
+							],
+							"path": [
+								"discover"
+							]
+						},
+						"description": "BAP free-text discover query (Intent.textSearch, beckn.yaml). \"coffee\" matches both published resources' descriptors (Bru Gold Instant Coffee Powder / Nescafe Classic under \"Generic Classic Item\") against CAT-GENERIC-001's actually published content."
+					},
+					"response": []
+				},
+				{
+					"name": "discover - spatial",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\": []\n  },\n  \"message\": {\n    \"intent\": {\n      \"spatial\": [\n        {\n          \"op\": \"S_DWITHIN\",\n          \"targets\": \"$.catalogs[*].resources[*].availableAt[*].geo\",\n          \"geometry\": {\n            \"type\": \"Point\",\n            \"coordinates\": [\n              77.6401,\n              12.9116\n            ]\n          },\n          \"distanceMeters\": 5000\n        }\n      ]\n    }\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{bap_adapter_url}}/discover",
+							"host": [
+								"{{bap_adapter_url}}"
+							],
+							"path": [
+								"discover"
+							]
+						},
+						"description": "BAP spatial discover query (Intent.spatial). Uses the op/targets/geometry/distanceMeters shape (S_DWITHIN + a JSONPath target + GeoJSON Point + radius), not CQL2-style args -- that shape 404s with SCH_FIELD_NOT_ALLOWED on this deployment's schemaValidator. Centered on the HSR Layout coordinates already used in ITEM-GENERIC-001's availableAt.geo, so it should hit that real published resource."
 					},
 					"response": []
 				}
 			]
 		},
 		{
-			"name": "2 \u2014 Transaction",
+			"name": "2 — Transaction",
 			"item": [
 				{
 					"name": "select",
@@ -75,7 +139,7 @@
 								"select"
 							]
 						},
-						"description": "BAP selects resources from catalog.\n\nSpec rules (beckn.yaml):\n\u2022 Commitment.required = [status, resources, offer]\n\u2022 status.descriptor.code \u2208 {DRAFT, ACTIVE, CLOSED}\n\u2022 resources = array of Resource (each needs @type, id, descriptor, quantity)\n\u2022 offer.required = [@type, id, resourceIds]\n\u2022 @context omitted on all core beckn.yaml objects"
+						"description": "BAP selects resources from catalog.\n\nSpec rules (beckn.yaml):\n• Commitment.required = [status, resources, offer]\n• status.descriptor.code ∈ {DRAFT, ACTIVE, CLOSED}\n• resources = array of Resource (each needs @type, id, descriptor, quantity)\n• offer.required = [@type, id, resourceIds]\n• @context omitted on all core beckn.yaml objects"
 					},
 					"response": []
 				},
@@ -107,7 +171,7 @@
 								"init"
 							]
 						},
-						"description": "BAP provides buyer details, performance preferences, and payment intent.\n\nSpec rules (beckn.yaml):\n\u2022 participants carry buyer contact via participantAttributes (Attributes bag)\n\u2022 performance.required = [@context, @type] per spec \u2014 @context kept as spec const\n\u2022 settlements carry payment method via settlementAttributes (Attributes bag)\n\u2022 @context omitted on all core beckn.yaml objects except Performance (spec-required)"
+						"description": "BAP provides buyer details, performance preferences, and payment intent.\n\nSpec rules (beckn.yaml):\n• participants carry buyer contact via participantAttributes (Attributes bag)\n• performance.required = [@context, @type] per spec — @context kept as spec const\n• settlements carry payment method via settlementAttributes (Attributes bag)\n• @context omitted on all core beckn.yaml objects except Performance (spec-required)"
 					},
 					"response": []
 				},
@@ -152,7 +216,7 @@
 			"script": {
 				"type": "text/javascript",
 				"exec": [
-					"// Beckn Protocol v2.0.0 \u2014 BAP Generic Collection",
+					"// Beckn Protocol v2.0.0 — BAP Generic Collection",
 					"// Pre-request: transaction_id can be overridden here for end-to-end flows",
 					"if (!pm.collectionVariables.get('transaction_id')) {",
 					"    pm.collectionVariables.set('transaction_id', pm.variables.replaceIn('{{$guid}}'));",
@@ -191,23 +255,23 @@
 		},
 		{
 			"key": "public_url",
-			"value": "https://<your-ngrok-domain>.ngrok-free.app",
+			"value": "https://angular-absently-gab.ngrok-free.dev",
 			"description": "Base URL for bapUri / bppUri callbacks. Set to the ngrok tunnel (not host.docker.internal / beckn-router) because discover now targets a separate remote discovr stack that cannot reach a Docker-internal hostname for the async on_discover callback."
 		},
 		{
 			"key": "bap_uri",
 			"value": "{{public_url}}/bap/receiver",
-			"description": "BAP receiver callback URI \u2014 derived from public_url via beckn-router"
+			"description": "BAP receiver callback URI — derived from public_url via beckn-router"
 		},
 		{
 			"key": "bpp_id",
 			"value": "bpp.example.com",
-			"description": "BPP subscriber ID (FQDN)"
+			"description": "BPP subscriber ID (FQDN) -- must match generic-bpp.yaml's keyManager.config.subscriberId, or the BPP can't find its own keyset for the identity a request's context.bpp_id claims"
 		},
 		{
 			"key": "bpp_uri",
 			"value": "{{public_url}}/bpp/receiver",
-			"description": "BPP receiver callback URI \u2014 derived from public_url via beckn-router"
+			"description": "BPP receiver callback URI — derived from public_url via beckn-router"
 		},
 		{
 			"key": "networkId",
@@ -217,7 +281,7 @@
 		{
 			"key": "transaction_id",
 			"value": "",
-			"description": "Transaction ID \u2014 set once in pre-request script, shared across all calls in a flow"
+			"description": "Transaction ID — set once in pre-request script, shared across all calls in a flow"
 		},
 		{
 			"key": "bap_base_url",
