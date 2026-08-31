@@ -326,11 +326,35 @@ After each step, check the `onix-bap` and `onix-bpp` logs to see the message bei
 
 ### Prerequisites for your published catalogs to be discoverable
 
-Neither of these is needed to use `discover` itself — it already serves catalogs already indexed from other sources. They only matter if you want catalogs you publish here to show up in `discover` results:
+Neither of these is needed to use `discover` itself — it already serves catalogs already indexed from other sources. They only matter if you want catalogs you publish here to show up in `discover` results. If you just want to see `catalog/publish` write files locally, skip straight to [Trigger it](#trigger-it) — everything below is only needed to make those files crawlable on the network.
 
-1. **Publicly available storage for the catalog files.** `catalog/publish` writes files to `outputRoot` on disk (see "Where the files get written" below), but a crawler can only fetch them from a public URL — your own domain, a CDN, GitHub (e.g. GitHub Pages/raw), or a tunnel such as ngrok for local testing. `catalogBaseURL` in `generic-bpp.yaml` must point at wherever `outputRoot` is actually being served from.
-2. **A live DeDi registry entry for your node, with `meta.catalog_index_urls` set.** Your node needs to be a member of a networkId with a registry record pointing at the published index URL above — a crawler only picks up your catalog once this is set.
-   > TBD — the DeDi registration steps for this are not documented yet.
+1. **Publicly available storage for the catalog files, matching your tunnel.** `catalog/publish` writes files to `outputRoot` on disk (see "Where the files get written" below), and `beckn-router` already serves that same directory (`generic-devkit/data/beckn`) at `/beckn/*` (see [Public-Internet Testing](#public-internet-testing-ngrok)). So the simplest setup is to reuse the tunnel you already configured there, rather than standing up separate storage:
+
+   - Set `catalogBaseURL` in `generic-devkit/config/generic-bpp.yaml` to the **same domain** as your Postman `public_url` variable, with a `/beckn` suffix:
+     ```yaml
+     catalogBaseURL: "https://<your-static-domain>.ngrok-free.app/beckn"
+     ```
+   - This is a manual, separate setting — it is not derived from `public_url` automatically, so if you change your ngrok domain, update both places.
+   - Any other public HTTPS storage (your own domain, a CDN, GitHub Pages) works too, if you'd rather not route catalog files through the tunnel — just point `catalogBaseURL` at wherever you deploy the `index/` and `catalogs/` directories.
+
+2. **A live DeDi registry entry for your node, with `meta.catalog_index_urls` set.** Your node needs to be a member of a networkId with a registry record pointing at the published index URL above — a crawler only picks up your catalog once this is set. This is the file-based DeDi registration flow (see the [DeDi onboarding docs](https://docs.nfh.global/build/onboarding/file-based.md) and [Catalog Publishing and Discovery](https://docs.nfh.global/build/creating-a-network/catalog-publishing-and-discovery.md) for the authoritative reference):
+
+   1. **Generate a signing key.** Every catalog file and index entry you publish is self-signed with an Ed25519 key. Generate one and register its public key against your participant identity on the DeDi Registry — see [key management](https://docs.nfh.global/product-documentation/products/vc-on-edge/desktop.md) for generating/importing a signing key.
+   2. **Publish a DeDi index file** at `https://<your-static-domain>.ngrok-free.app/.well-known/dedi.index.json`, listing your signing key and the registry file(s) you publish (schema: [dedi-manifest.schema.json](https://github.com/LF-Decentralized-Trust-labs/decentralized-directory-protocol/blob/main/schemas/dedi-manifest.schema.json)).
+   3. **Publish a registry file** under `/dedi/`, e.g. `https://<your-static-domain>.ngrok-free.app/dedi/<nfoname>_<networkname>_<env>_registry.json`, containing your signed Beckn Subscriber record (schema: [beckn_subscriber.json](https://github.com/LF-Decentralized-Trust-labs/decentralized-directory-protocol/blob/main/schemas/beckn_subscriber.json)).
+   4. **Add `meta.catalog_index_urls` to that Subscriber record**, pointing at the catalog index `catalog/publish` writes:
+      ```json
+      {
+        "meta": {
+          "catalog_index_urls": [
+            { "url": "https://<your-static-domain>.ngrok-free.app/beckn/index/becknCatalogs.index.json" }
+          ]
+        }
+      }
+      ```
+      This is the only pointer a crawler has to find your catalog index — without it, `catalog/publish` still writes valid signed files, but no one will ever find them.
+
+Once both are in place, continue to [Trigger it](#trigger-it) below, then confirm it worked in [Verifying it worked](#verifying-it-worked).
 
 ### Trigger it
 
@@ -377,6 +401,20 @@ The request body has an envelope shape of `context`/`message.catalogs[]`/`messag
 ```
 
 A fatal failure (e.g. signing failure) returns `200` with `status: FAILED` and an `error` object instead. Publishing the same catalogId again with edited `resources`/`offers` produces an incremental change file and bumps its version instead of a fresh baseline; publishing it unchanged is a no-op. Inspect `generic-devkit/data/beckn/` on the host to see the generated manifest, catalog index, and versioned catalog files directly.
+
+### Verifying it worked
+
+If you only care about `catalog/publish` writing files locally, a `COMPLETED`/`ACCEPTED` response and the files present under `generic-devkit/data/beckn/` (see "Where the files get written" below) are enough — stop here.
+
+To confirm the catalog is actually discoverable on the network (i.e. the [prerequisites](#prerequisites-for-your-published-catalogs-to-be-discoverable) above are wired up correctly):
+
+1. **Confirm the catalog index is publicly reachable** through the tunnel, matching `catalogBaseURL`:
+   ```shell
+   curl https://<your-static-domain>.ngrok-free.app/beckn/index/becknCatalogs.index.json
+   ```
+   This should return the same `becknCatalogs.index.json` you can see on disk in `generic-devkit/data/beckn/index/` — if it 404s or times out, `beckn-router`/ngrok isn't serving `/beckn/*`, or `catalogBaseURL` doesn't match your tunnel domain.
+2. **Confirm your DeDi Subscriber record is reachable** and has `meta.catalog_index_urls` set, pointing at the URL from step 1.
+3. **Run `discover`** from the BAP Postman collection. Your published catalog should now appear among the `on_discover` results — this can take a little while, since it depends on the Discovery Service's crawl cycle picking up your registry entry.
 
 ### Where the files get written
 
