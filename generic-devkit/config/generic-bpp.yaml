@@ -219,7 +219,7 @@ modules:
             # Public URL prefix outputRoot is served under (beckn-router's
             # ngrok tunnel, /beckn/* route in install/Caddyfile). Update if
             # your ngrok domain changes.
-            catalogBaseURL: "https://angular-absently-gab.ngrok-free.dev/beckn"
+            catalogBaseURL: "https://<your-static-domain>.ngrok-free.app/beckn"
             # Read-only, warn-only: checks whether this node's DeDi registry
             # record links this catalog index via meta.catalog_index_urls.
             checkCatalogIndexLink: "true"
