@@ -105,6 +105,38 @@
 						"description": "BAP spatial discover query (Intent.spatial). Uses the op/targets/geometry/distanceMeters shape (S_DWITHIN + a JSONPath target + GeoJSON Point + radius), not CQL2-style args -- that shape 404s with SCH_FIELD_NOT_ALLOWED on this deployment's schemaValidator. Centered on the HSR Layout coordinates already used in ITEM-GENERIC-001's availableAt.geo, so it should hit that real published resource."
 					},
 					"response": []
+				},
+				{
+					"name": "discover - jsonpath filter",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\": []\n  },\n  \"message\": {\n    \"intent\": {\n      \"filters\": {\n        \"type\": \"jsonpath\",\n        \"expression\": \"$.catalogs[*].resources[?(@.resourceAttributes.identity.brand == 'Tata')]\"\n      }\n    }\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{bap_adapter_url}}/discover",
+							"host": [
+								"{{bap_adapter_url}}"
+							],
+							"path": [
+								"discover"
+							]
+						},
+						"description": "BAP discover query using RFC 9535 JSONPath filter grammar (Intent.filters, type=jsonpath). Matches resources where resourceAttributes.identity.brand equals 'Tata'."
+					},
+					"response": []
 				}
 			]
 		},
