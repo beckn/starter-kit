@@ -86,7 +86,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\": []\n  },\n  \"message\": {\n    \"intent\": {\n      \"filters\": {\n        \"type\": \"jsonpath\",\n        \"expression\": \"$.catalogs[*].resources[?(@.resourceAttributes.identity.brand == 'Tata')]\"\n      }\n    }\n  }\n}",
+							"raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\": []\n  },\n  \"message\": {\n    \"intent\": {\n      \"filters\": {\n        \"type\": \"jsonpath\",\n        \"expression\": \"$.catalogs[*].resources[?(@.rating.ratingValue >= 4.0)]\"\n      }\n    }\n  }\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -102,7 +102,7 @@
 								"discover"
 							]
 						},
-						"description": "BAP discover query using RFC 9535 JSONPath filter grammar (Intent.filters, type=jsonpath). Matches resources where resourceAttributes.identity.brand equals 'Tata'."
+						"description": "BAP discover query using RFC 9535 JSONPath filter grammar (Intent.filters, type=jsonpath). Matches resources where rating.ratingValue >= 4.0 — both ITEM-GENERIC-001 and ITEM-GENERIC-002 in CAT-GENERIC-001 have ratingValue 4.1, so this returns non-zero catalogs against the actually published data."
 					},
 					"response": []
 				}
