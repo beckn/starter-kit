@@ -11,38 +11,6 @@
 			"name": "1 — Discovery",
 			"item": [
 				{
-					"name": "discover",
-					"request": {
-						"method": "POST",
-						"header": [
-							{
-								"key": "Content-Type",
-								"value": "application/json"
-							}
-						],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\":[]\n  },\n  \"message\": {\n        \"intent\": {\n            \"filters\": {\n                \"type\": \"jsonpath\",\n                \"expression\":\"$.catalogs[*] ? (@.id == \\\"bpp.example.com/CAT-GENERIC-001\\\")\"  \n            }\n        }\n  }\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{bap_adapter_url}}/discover",
-							"host": [
-								"{{bap_adapter_url}}"
-							],
-							"path": [
-								"discover"
-							]
-						},
-						"description": "BAP selects resources from catalog.\n\nSpec rules (beckn.yaml):\n• Commitment.required = [status, resources, offer]\n• status.descriptor.code ∈ {DRAFT, ACTIVE, CLOSED}\n• resources = array of Resource (each needs @type, id, descriptor, quantity)\n• offer.required = [@type, id, resourceIds]\n• @context omitted on all core beckn.yaml objects"
-					},
-					"response": []
-				},
-				{
 					"name": "discover - textSearch",
 					"request": {
 						"method": "POST",
@@ -103,6 +71,38 @@
 							]
 						},
 						"description": "BAP spatial discover query (Intent.spatial). Uses the op/targets/geometry/distanceMeters shape (S_DWITHIN + a JSONPath target + GeoJSON Point + radius), not CQL2-style args -- that shape 404s with SCH_FIELD_NOT_ALLOWED on this deployment's schemaValidator. Centered on the HSR Layout coordinates already used in ITEM-GENERIC-001's availableAt.geo, so it should hit that real published resource."
+					},
+					"response": []
+				},
+				{
+					"name": "discover - jsonpath filter",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"context\": {\n    \"networkId\": \"{{networkId}}\",\n    \"action\": \"discover\",\n    \"version\": \"2.0.0\",\n    \"bapId\": \"{{bap_id}}\",\n    \"bapUri\": \"{{bap_uri}}\",\n    \"transactionId\": \"{{transaction_id}}\",\n    \"messageId\": \"{{$guid}}\",\n    \"timestamp\": \"{{$isoTimestamp}}\",\n    \"ttl\": \"PT30S\",\n    \"schemaContext\": []\n  },\n  \"message\": {\n    \"intent\": {\n      \"filters\": {\n        \"type\": \"jsonpath\",\n        \"expression\": \"$.catalogs[*].resources[?(@.rating.ratingValue >= 4.0)]\"\n      }\n    }\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{bap_adapter_url}}/discover",
+							"host": [
+								"{{bap_adapter_url}}"
+							],
+							"path": [
+								"discover"
+							]
+						},
+						"description": "BAP discover query using RFC 9535 JSONPath filter grammar (Intent.filters, type=jsonpath). Matches resources where rating.ratingValue >= 4.0 — both ITEM-GENERIC-001 and ITEM-GENERIC-002 in CAT-GENERIC-001 have ratingValue 4.1, so this returns non-zero catalogs against the actually published data."
 					},
 					"response": []
 				}
